@@ -51,6 +51,36 @@ async function atomicWrite(filePath: string, content: string) {
   await fs.rename(tmp, filePath)
 }
 
+/**
+ * Recursively list markdown files under a folder. Caps depth at 2 to keep
+ * sidebar light — deep workspaces with hundreds of files would be slow to
+ * render flat.
+ */
+async function listMarkdownInFolder(folder: string, depth = 2): Promise<DirEntry[]> {
+  const out: DirEntry[] = []
+  async function walk(dir: string, level: number) {
+    if (level > depth) return
+    let entries
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      if (entry.name === 'node_modules' || entry.name === 'assets') continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(full, level + 1)
+      } else if (/\.(md|markdown)$/i.test(entry.name)) {
+        out.push({ filePath: full, fileName: entry.name })
+      }
+    }
+  }
+  await walk(folder, 0)
+  return out.sort((a, b) => a.fileName.localeCompare(b.fileName))
+}
+
 async function loadFile(filePath: string): Promise<OpenResult> {
   try {
     const content = await fs.readFile(filePath, 'utf-8')
@@ -146,6 +176,22 @@ export function registerFileHandlers() {
     } catch {
       return []
     }
+  })
+
+  ipcMain.handle('file:openFolder', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return { ok: false }
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false }
+    const folder = result.filePaths[0]
+    const entries = await listMarkdownInFolder(folder)
+    return { ok: true, folder, entries }
+  })
+
+  ipcMain.handle('file:listFolder', async (_e, folder: string) => {
+    return listMarkdownInFolder(folder)
   })
 
   /**

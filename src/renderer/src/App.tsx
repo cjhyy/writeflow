@@ -4,7 +4,7 @@ import { FileTree } from './components/FileTree'
 import { FindBar } from './components/FindBar'
 import { HtmlPreview } from './components/HtmlPreview'
 import { Outline } from './components/Outline'
-import { StatusBar } from './components/StatusBar'
+import { ScrollToTop } from './components/ScrollToTop'
 import { TitleBar } from './components/TitleBar'
 import { useDocStore } from './stores/document-store'
 import { useUiStore } from './stores/ui-store'
@@ -17,7 +17,10 @@ export function App() {
   const [scrolled, setScrolled] = useState(false)
   const [fileTreeOpen, setFileTreeOpen] = useState(false)
   const [outlineOpen, setOutlineOpen] = useState(false)
-  const editorScrollRef = useRef<HTMLDivElement>(null)
+  // Using a state ref so children that mount after the scroller (FindBar,
+  // ScrollToTop) get a stable, current DOM reference instead of a stale null.
+  const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null)
+  const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Apply theme to root so CSS variables pick up the right palette
@@ -196,10 +199,13 @@ export function App() {
         {fileTreeOpen && <FileTree activeFilePath={doc.filePath} onSelect={doOpenByPath} />}
         <div className="flex-1 min-w-0 flex flex-col relative">
           {findOpen && (
-            <FindBar scrollContainer={editorScrollRef.current} onClose={() => setFindOpen(false)} />
+            <FindBar scrollContainer={scrollerEl} onClose={() => setFindOpen(false)} />
           )}
           <div
-            ref={editorScrollRef}
+            ref={(el) => {
+              editorScrollRef.current = el
+              setScrollerEl(el)
+            }}
             data-editor-scroll
             className="flex-1 min-h-0 overflow-y-auto"
             onScroll={(e) => setScrolled((e.target as HTMLDivElement).scrollTop > 4)}
@@ -214,12 +220,12 @@ export function App() {
               />
             )}
           </div>
+          <ScrollToTop scroller={scrollerEl} />
         </div>
         {outlineOpen && !doc.isHtmlPreview && (
           <Outline markdown={doc.content} onJump={handleOutlineJump} />
         )}
       </div>
-      <StatusBar />
     </div>
   )
 }

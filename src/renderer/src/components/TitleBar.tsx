@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDocStore } from '../stores/document-store'
 import type { RecentFile } from '@shared/types'
 
@@ -13,6 +13,13 @@ interface TitleBarProps {
   scrolled: boolean
 }
 
+function countWords(text: string) {
+  const stripped = text.replace(/```[\s\S]*?```/g, '').replace(/[#*_>\-`!\[\]()]/g, ' ')
+  const cjk = stripped.match(/[一-鿿぀-ヿ가-힯]/g)?.length ?? 0
+  const ascii = stripped.replace(/[一-鿿぀-ヿ가-힯]/g, ' ').trim().split(/\s+/).filter(Boolean).length
+  return cjk + ascii
+}
+
 export function TitleBar({
   onOpenRecent,
   onNew,
@@ -23,10 +30,12 @@ export function TitleBar({
   outlineOpen,
   scrolled,
 }: TitleBarProps) {
-  const { fileName, dirty } = useDocStore()
+  const { fileName, dirty, content } = useDocStore()
   const [recent, setRecent] = useState<RecentFile[]>([])
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const words = useMemo(() => countWords(content), [content])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -38,40 +47,32 @@ export function TitleBar({
     return () => document.removeEventListener('mousedown', onClick)
   }, [menuOpen])
 
+  const displayName = fileName.replace(/\.md$/i, '')
+
   return (
     <div className={`title-bar ${scrolled ? 'scrolled' : ''}`}>
-      {/* Left: file tree toggle + new file */}
-      <button
-        className={`title-icon-btn interactive ${fileTreeOpen ? 'active' : ''}`}
-        title="Toggle file tree (⌘\\)"
-        onClick={onToggleFileTree}
-      >
-        <SidebarIcon side="left" />
-      </button>
-      <button
-        className="title-icon-btn interactive"
-        title="New file (⌘N)"
-        onClick={onNew}
-      >
-        <NewFileIcon />
-      </button>
+      {/* Left: empty space for macOS traffic lights only */}
+      <div className="title-bar-left" />
 
-      {/* Center: filename + recent dropdown */}
-      <div ref={menuRef} className="interactive relative flex-1 flex items-center justify-center">
+      {/* Center: filename — dirty marker + dropdown */}
+      <div ref={menuRef} className="title-bar-center interactive">
         <button
-          className="px-2 py-1 hover:bg-neutral-200 rounded text-[12px]"
+          className="title-filename-btn"
           onClick={() => setMenuOpen((v) => !v)}
+          title="Recent files"
         >
-          {fileName}
-          {dirty && <span className="dirty-dot" />}
+          <span className="title-name">{displayName}</span>
+          <span className="title-dash">—</span>
+          <span className="title-status">{dirty ? '已编辑' : '已保存'}</span>
+          <ChevronDownIcon />
         </button>
         {menuOpen && (
           <div className="recent-menu">
-            <button onClick={() => { setMenuOpen(false); onNew() }}>＋ New File</button>
-            <button onClick={() => { setMenuOpen(false); onOpen() }}>📂 Open…</button>
+            <button onClick={() => { setMenuOpen(false); onNew() }}>＋ 新建</button>
+            <button onClick={() => { setMenuOpen(false); onOpen() }}>📂 打开…</button>
             {recent.length > 0 && (
               <>
-                <div className="text-[10px] text-neutral-500 px-2 py-1 mt-1 uppercase tracking-wider">Recent</div>
+                <div className="recent-menu-label">最近</div>
                 {recent.map((r) => (
                   <button
                     key={r.filePath}
@@ -87,34 +88,53 @@ export function TitleBar({
         )}
       </div>
 
-      {/* Right: outline toggle */}
-      <button
-        className={`title-icon-btn interactive ${outlineOpen ? 'active' : ''}`}
-        title="Toggle outline (⌘⇧1)"
-        onClick={onToggleOutline}
-      >
-        <SidebarIcon side="right" />
-      </button>
+      {/* Right: word count + outline + file-tree */}
+      <div className="title-bar-right interactive">
+        <span className="title-words" title="Word count">
+          {words} 词
+        </span>
+        <button
+          className={`title-icon-btn ${outlineOpen ? 'active' : ''}`}
+          title="Toggle outline (⌘⇧1)"
+          onClick={onToggleOutline}
+        >
+          <OutlineIcon />
+        </button>
+        <button
+          className={`title-icon-btn ${fileTreeOpen ? 'active' : ''}`}
+          title="Toggle file tree (⌘\\)"
+          onClick={onToggleFileTree}
+        >
+          <SidebarIcon />
+        </button>
+      </div>
     </div>
   )
 }
 
-function SidebarIcon({ side }: { side: 'left' | 'right' }) {
+function ChevronDownIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="2" y="3" width="12" height="10" rx="1.5" />
-      <line x1={side === 'left' ? '6' : '10'} y1="3" x2={side === 'left' ? '6' : '10'} y2="13" />
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginLeft: 4, opacity: 0.6 }}>
+      <polyline points="3,5 6,8 9,5" />
     </svg>
   )
 }
 
-function NewFileIcon() {
+function OutlineIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M4 2h5l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
-      <path d="M9 2v3h3" />
-      <line x1="7.5" y1="8" x2="7.5" y2="12" />
-      <line x1="5.5" y1="10" x2="9.5" y2="10" />
+      <line x1="3" y1="4" x2="13" y2="4" />
+      <line x1="5" y1="8" x2="13" y2="8" />
+      <line x1="7" y1="12" x2="13" y2="12" />
+    </svg>
+  )
+}
+
+function SidebarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <line x1="6" y1="3" x2="6" y2="13" />
     </svg>
   )
 }

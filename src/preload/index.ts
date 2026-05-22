@@ -35,6 +35,8 @@ const api: DesktopApi = {
     readRecentFiles: () => ipcRenderer.invoke('file:recent') as Promise<RecentFile[]>,
     clearRecentFiles: () => ipcRenderer.invoke('file:clearRecent') as Promise<void>,
     listDir: (p) => ipcRenderer.invoke('file:listDir', p) as Promise<DirEntry[]>,
+    openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ ok: boolean; folder?: string; entries?: DirEntry[] }>,
+    listFolder: (f) => ipcRenderer.invoke('file:listFolder', f) as Promise<DirEntry[]>,
     saveImage: (input) => ipcRenderer.invoke('file:saveImage', input) as Promise<SaveImageResult>,
     exportPdf: (input) => ipcRenderer.invoke('file:exportPdf', input) as Promise<ExportPdfResult>,
   },

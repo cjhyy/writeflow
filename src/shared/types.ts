@@ -68,6 +68,8 @@ export interface DesktopApi {
     readRecentFiles: () => Promise<RecentFile[]>
     clearRecentFiles: () => Promise<void>
     listDir: (filePath: string) => Promise<DirEntry[]>
+    openFolder: () => Promise<{ ok: boolean; folder?: string; entries?: DirEntry[] }>
+    listFolder: (folder: string) => Promise<DirEntry[]>
     saveImage: (input: { docPath: string | null; bytes: ArrayBuffer; ext: string }) => Promise<SaveImageResult>
     exportPdf: (input: { suggestedName?: string }) => Promise<ExportPdfResult>
   }
