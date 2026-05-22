@@ -37,6 +37,7 @@ const api: DesktopApi = {
     clearRecentFiles: () => ipcRenderer.invoke('file:clearRecent') as Promise<void>,
     listDir: (p) => ipcRenderer.invoke('file:listDir', p) as Promise<DirEntry[]>,
     openFolder: () => ipcRenderer.invoke('file:openFolder') as Promise<{ ok: boolean; folder?: string; entries?: DirEntry[] }>,
+    takePendingOpen: () => ipcRenderer.invoke('app:takePendingOpen') as Promise<string | null>,
     listFolder: (f) => ipcRenderer.invoke('file:listFolder', f) as Promise<DirEntry[]>,
     saveImage: (input) => ipcRenderer.invoke('file:saveImage', input) as Promise<SaveImageResult>,
     exportPdf: (input) => ipcRenderer.invoke('file:exportPdf', input) as Promise<ExportPdfResult>,
@@ -78,6 +79,12 @@ const api: DesktopApi = {
     menuOpenFolder: (cb) => onChannel('menu:openFolder', cb),
     menuRevealInFinder: (cb) => onChannel('menu:revealInFinder', cb),
     menuExportHtml: (cb) => onChannel('menu:exportHtml', cb),
+    menuReplace: (cb) => onChannel('menu:replace', cb),
+    appOpenFromOS: (cb) => {
+      const handler = (_: unknown, p: string) => cb(p)
+      ipcRenderer.on('app:openFromOS', handler)
+      return () => ipcRenderer.removeListener('app:openFromOS', handler)
+    },
     menuFormat: (cb) => {
       const map: Record<string, FormatAction> = {
         'menu:fmtH1': 'h1', 'menu:fmtH2': 'h2', 'menu:fmtH3': 'h3', 'menu:fmtH4': 'h4',

@@ -60,6 +60,18 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown",
+        "role": "Editor"
+      },
+      {
+        "ext": "markdown",
+        "name": "Markdown",
+        "role": "Editor"
+      }
+    ]
   }
 }

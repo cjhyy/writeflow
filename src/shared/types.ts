@@ -76,6 +76,7 @@ export interface DesktopApi {
     clearRecentFiles: () => Promise<void>
     listDir: (filePath: string) => Promise<DirEntry[]>
     openFolder: () => Promise<{ ok: boolean; folder?: string; entries?: DirEntry[] }>
+    takePendingOpen: () => Promise<string | null>
     listFolder: (folder: string) => Promise<DirEntry[]>
     saveImage: (input: { docPath: string | null; bytes: ArrayBuffer; ext: string }) => Promise<SaveImageResult>
     exportPdf: (input: { suggestedName?: string }) => Promise<ExportPdfResult>
@@ -104,6 +105,8 @@ export interface DesktopApi {
     menuOpenFolder: (cb: () => void) => () => void
     menuRevealInFinder: (cb: () => void) => () => void
     menuExportHtml: (cb: () => void) => () => void
+    menuReplace: (cb: () => void) => () => void
+    appOpenFromOS: (cb: (filePath: string) => void) => () => void
     menuFormat: (cb: (action: FormatAction) => void) => () => void
   }
 }

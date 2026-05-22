@@ -77,7 +77,7 @@ export function buildMenu(getWindow: () => BrowserWindow | null) {
         { role: 'selectAll', label: '全选' },
         { type: 'separator' },
         { label: '查找', accelerator: 'CmdOrCtrl+F', click: send('menu:find') },
-        { label: '替换', accelerator: 'CmdOrCtrl+H', enabled: false },
+        { label: '替换', accelerator: 'CmdOrCtrl+H', click: send('menu:replace') },
       ],
     },
 

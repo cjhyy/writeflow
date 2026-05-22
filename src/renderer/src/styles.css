@@ -381,6 +381,12 @@ body {
   cursor: default;
 }
 
+.title-caret {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
 .title-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -474,9 +480,9 @@ body {
   letter-spacing: 0.05em;
 }
 
-/* File tree (Typora-style) */
-.file-tree {
-  width: 250px;
+/* Sidebar (single panel, Files / Outline tabs) */
+.sidebar {
+  width: 240px;
   flex-shrink: 0;
   height: 100%;
   display: flex;
@@ -485,43 +491,60 @@ body {
   border-right: 1px solid var(--border);
 }
 
-.file-tree-header {
-  padding: 70px 20px 16px;
+.sidebar-tabs {
+  display: flex;
+  padding: 52px 12px 8px;
+  gap: 4px;
 }
 
-.file-tree-title {
-  font-size: 22px;
-  font-weight: 600;
+.sidebar-tab {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.sidebar-tab:hover {
+  background: var(--row-hover);
   color: var(--text);
-  margin: 0;
-  letter-spacing: -0.01em;
 }
 
-.file-tree-body {
+.sidebar-tab.active {
+  background: var(--row-active);
+  color: var(--accent);
+}
+
+.sidebar-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-top: 4px;
 }
 
-.file-tree-empty {
-  padding: 40% 20px 0;
+.sidebar-empty {
+  padding: 24% 16px 0;
   text-align: center;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.file-tree-list {
+.sidebar-list {
   list-style: none;
   margin: 0;
   padding: 0 8px;
 }
 
-.file-tree-item {
+.sidebar-item {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 7px 12px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 12.5px;
   color: var(--text);
   background: transparent;
   border: none;
@@ -530,34 +553,35 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
-.file-tree-item:hover {
+.sidebar-item:hover {
   background: var(--row-hover);
 }
 
-.file-tree-item.active {
+.sidebar-item.active {
   background: var(--row-active);
   color: var(--accent);
 }
 
-.file-tree-footer {
-  padding: 12px;
+.sidebar-footer {
+  padding: 10px 12px;
   border-top: 1px solid var(--border-soft);
 }
 
-.file-tree-open-btn {
+.sidebar-open-btn {
   width: 100%;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 12px;
   color: var(--text-muted);
   background: transparent;
   border: 1px dashed var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
 }
 
-.file-tree-open-btn:hover {
+.sidebar-open-btn:hover {
   background: var(--row-hover);
   color: var(--text);
   border-color: var(--text-muted);
@@ -608,13 +632,32 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.find-bar-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.find-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .find-bar input {
   width: 200px;
   font-size: 12px;
-  border: none;
+  border: 1px solid transparent;
   outline: none;
   background: transparent;
   color: var(--text);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.find-bar input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
 }
 
 .find-bar-count {

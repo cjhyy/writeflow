@@ -1,37 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Editor } from './components/Editor'
-import { FileTree } from './components/FileTree'
 import { FindBar } from './components/FindBar'
 import { HtmlPreview } from './components/HtmlPreview'
-import { Outline } from './components/Outline'
 import { PreferencesModal } from './components/PreferencesModal'
 import { ScrollToTop } from './components/ScrollToTop'
+import { Sidebar } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
 import { useDocStore } from './stores/document-store'
 import { useUiStore } from './stores/ui-store'
 
 const AUTOSAVE_DELAY_MS = 1500
+const SIDEBAR_KEY = 'writeflow.sidebar.open'
 
 export function App() {
   const doc = useDocStore()
   const { theme, focusMode, typewriterMode, findOpen, setTheme, toggleFocusMode, toggleTypewriterMode, setFindOpen } = useUiStore()
   const [scrolled, setScrolled] = useState(false)
-  const [fileTreeOpen, setFileTreeOpen] = useState(false)
-  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem(SIDEBAR_KEY) === '1')
+  const [findMode, setFindMode] = useState<'find' | 'replace'>('find')
   const [prefsOpen, setPrefsOpen] = useState(false)
-  // Using a state ref so children that mount after the scroller (FindBar,
-  // ScrollToTop) get a stable, current DOM reference instead of a stale null.
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null)
   const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Apply theme to root so CSS variables pick up the right palette
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? '1' : '0')
+  }, [sidebarOpen])
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
-  // Load persisted settings on mount; pipe theme + font + line-height into
-  // the renderer state and into CSS custom properties.
   useEffect(() => {
     window.api.settings.get().then((s) => {
       setTheme(s.theme)
@@ -129,6 +128,15 @@ export function App() {
     await window.api.file.exportPdf({ suggestedName: s.fileName })
   }, [])
 
+  // OS-level open: macOS Finder / dock, or CLI arg on boot
+  useEffect(() => {
+    window.api.file.takePendingOpen().then((p) => {
+      if (p) doOpenByPath(p)
+    })
+    const unsub = window.api.on.appOpenFromOS((p) => doOpenByPath(p))
+    return unsub
+  }, [doOpenByPath])
+
   // Menu bindings
   useEffect(() => {
     const u = [
@@ -137,9 +145,10 @@ export function App() {
       window.api.on.menuSave(() => { void doSave() }),
       window.api.on.menuSaveAs(() => { void doSaveAs() }),
       window.api.on.menuExportPdf(() => { void doExportPdf() }),
-      window.api.on.menuFind(() => setFindOpen(true)),
-      window.api.on.menuToggleFileTree(() => setFileTreeOpen((v) => !v)),
-      window.api.on.menuToggleOutline(() => setOutlineOpen((v) => !v)),
+      window.api.on.menuFind(() => { setFindMode('find'); setFindOpen(true) }),
+      window.api.on.menuReplace(() => { setFindMode('replace'); setFindOpen(true) }),
+      window.api.on.menuToggleFileTree(() => setSidebarOpen((v) => !v)),
+      window.api.on.menuToggleOutline(() => setSidebarOpen((v) => !v)),
       window.api.on.menuToggleFocusMode(() => toggleFocusMode()),
       window.api.on.menuToggleTypewriter(() => toggleTypewriterMode()),
       window.api.on.menuTheme((t) => setTheme(t)),
@@ -147,18 +156,19 @@ export function App() {
     return () => u.forEach((fn) => fn())
   }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, setFindOpen, toggleFocusMode, toggleTypewriterMode, setTheme])
 
-  // Keyboard fallbacks (also handled by native menu, but here for in-renderer focus)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!e.metaKey && !e.ctrlKey) return
       if (e.key === '\\') {
         e.preventDefault()
-        setFileTreeOpen((v) => !v)
-      } else if (e.shiftKey && e.key === '!') {
-        e.preventDefault()
-        setOutlineOpen((v) => !v)
+        setSidebarOpen((v) => !v)
       } else if (e.key === 'f' && !e.shiftKey) {
         e.preventDefault()
+        setFindMode('find')
+        setFindOpen(true)
+      } else if (e.key === 'h' && !e.shiftKey) {
+        e.preventDefault()
+        setFindMode('replace')
         setFindOpen(true)
       }
     }
@@ -166,12 +176,10 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [setFindOpen])
 
-  // Autosave on content change
   useEffect(() => {
     if (doc.dirty) scheduleAutosave()
   }, [doc.content, doc.dirty, scheduleAutosave])
 
-  // Beforeunload warning
   useEffect(() => {
     function handler(e: BeforeUnloadEvent) {
       if (useDocStore.getState().dirty) {
@@ -183,7 +191,7 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  const handleOutlineJump = useCallback((_slug: string, text: string) => {
+  const handleOutlineJump = useCallback((text: string) => {
     const scroller = editorScrollRef.current
     if (!scroller) return
     const headings = scroller.querySelectorAll<HTMLElement>('h1, h2, h3')
@@ -204,17 +212,26 @@ export function App() {
         onOpenRecent={doOpenByPath}
         onNew={doNew}
         onOpen={doOpen}
-        onToggleFileTree={() => setFileTreeOpen((v) => !v)}
-        onToggleOutline={() => setOutlineOpen((v) => !v)}
-        fileTreeOpen={fileTreeOpen}
-        outlineOpen={outlineOpen}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        sidebarOpen={sidebarOpen}
         scrolled={scrolled}
       />
       <div className="flex-1 min-h-0 flex">
-        {fileTreeOpen && <FileTree activeFilePath={doc.filePath} onSelect={doOpenByPath} />}
+        {sidebarOpen && (
+          <Sidebar
+            activeFilePath={doc.filePath}
+            markdown={doc.content}
+            onSelectFile={doOpenByPath}
+            onJumpHeading={handleOutlineJump}
+          />
+        )}
         <div className="flex-1 min-w-0 flex flex-col relative">
           {findOpen && (
-            <FindBar scrollContainer={scrollerEl} onClose={() => setFindOpen(false)} />
+            <FindBar
+              scrollContainer={scrollerEl}
+              onClose={() => setFindOpen(false)}
+              initialMode={findMode}
+            />
           )}
           <div
             ref={(el) => {
@@ -237,9 +254,6 @@ export function App() {
           </div>
           <ScrollToTop scroller={scrollerEl} />
         </div>
-        {outlineOpen && !doc.isHtmlPreview && (
-          <Outline markdown={doc.content} onJump={handleOutlineJump} />
-        )}
       </div>
       {prefsOpen && <PreferencesModal onClose={() => setPrefsOpen(false)} />}
     </div>

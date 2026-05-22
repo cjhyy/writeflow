@@ -53,7 +53,7 @@ export function Editor({ value, onChange }: EditorProps) {
         [Crepe.Feature.Toolbar]: true,
         [Crepe.Feature.BlockEdit]: false,
         [Crepe.Feature.Latex]: false,
-        [Crepe.Feature.CursorPlaceholder]: true,
+        [Crepe.Feature.Cursor]: true,
         [Crepe.Feature.Placeholder]: true,
         [Crepe.Feature.CodeMirror]: true,
         [Crepe.Feature.ListItem]: true,

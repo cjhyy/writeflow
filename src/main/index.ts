@@ -8,6 +8,24 @@ import { buildMenu } from './menu.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let mainWindow: BrowserWindow | null = null
+// File path queued by macOS "open-file" event before the window is ready.
+// Renderer reads it via the file:pendingOpen IPC during boot.
+let pendingOpenPath: string | null = null
+
+// macOS: Finder double-click or drag-onto-dock fires `open-file` before any
+// window exists. Stash the path and let the renderer claim it on boot.
+app.on('open-file', (event, path) => {
+  event.preventDefault()
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app:openFromOS', path)
+  } else {
+    pendingOpenPath = path
+  }
+})
+
+// Windows / Linux: CLI args may include a file path
+const cliArg = process.argv.find((a, i) => i > 0 && !a.startsWith('-') && /\.(md|markdown)$/i.test(a))
+if (cliArg) pendingOpenPath = cliArg
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -44,6 +62,12 @@ function createWindow() {
 app.whenReady().then(() => {
   registerFileHandlers()
   registerSettingsHandlers()
+
+  ipcMain.handle('app:takePendingOpen', () => {
+    const p = pendingOpenPath
+    pendingOpenPath = null
+    return p
+  })
 
   ipcMain.handle('dialog:confirm-discard', async (_e, fileName: string) => {
     if (!mainWindow) return 'cancel'

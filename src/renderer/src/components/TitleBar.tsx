@@ -6,10 +6,8 @@ interface TitleBarProps {
   onOpenRecent: (filePath: string) => void
   onNew: () => void
   onOpen: () => void
-  onToggleFileTree: () => void
-  onToggleOutline: () => void
-  fileTreeOpen: boolean
-  outlineOpen: boolean
+  onToggleSidebar: () => void
+  sidebarOpen: boolean
   scrolled: boolean
 }
 
@@ -24,18 +22,41 @@ export function TitleBar({
   onOpenRecent,
   onNew,
   onOpen,
-  onToggleFileTree,
-  onToggleOutline,
-  fileTreeOpen,
-  outlineOpen,
+  onToggleSidebar,
+  sidebarOpen,
   scrolled,
 }: TitleBarProps) {
   const { fileName, dirty, content } = useDocStore()
   const [recent, setRecent] = useState<RecentFile[]>([])
   const [menuOpen, setMenuOpen] = useState(false)
+  const [caretPos, setCaretPos] = useState<{ line: number; col: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const words = useMemo(() => countWords(content), [content])
+
+  // Track caret line/col inside ProseMirror editor.
+  // We compute by collapsing the selection to a text range, then counting
+  // line breaks before the caret in the ProseMirror DOM's textContent.
+  useEffect(() => {
+    function update() {
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return
+      const range = sel.getRangeAt(0)
+      const pm = (range.startContainer.parentElement?.closest('.ProseMirror') ?? null) as HTMLElement | null
+      if (!pm) {
+        setCaretPos(null)
+        return
+      }
+      const before = range.cloneRange()
+      before.selectNodeContents(pm)
+      before.setEnd(range.endContainer, range.endOffset)
+      const text = before.toString()
+      const lines = text.split('\n')
+      setCaretPos({ line: lines.length, col: lines[lines.length - 1].length + 1 })
+    }
+    document.addEventListener('selectionchange', update)
+    return () => document.removeEventListener('selectionchange', update)
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -88,22 +109,20 @@ export function TitleBar({
         )}
       </div>
 
-      {/* Right: word count + outline + file-tree */}
+      {/* Right: word count, caret position, sidebar toggle */}
       <div className="title-bar-right interactive">
-        <span className="title-words" title="Word count">
+        <span className="title-words" title="字数 · 光标位置">
           {words} 词
+          {caretPos && (
+            <span className="title-caret">
+              {' · '}L{caretPos.line} C{caretPos.col}
+            </span>
+          )}
         </span>
         <button
-          className={`title-icon-btn ${outlineOpen ? 'active' : ''}`}
-          title="Toggle outline (⌘⇧1)"
-          onClick={onToggleOutline}
-        >
-          <OutlineIcon />
-        </button>
-        <button
-          className={`title-icon-btn ${fileTreeOpen ? 'active' : ''}`}
-          title="Toggle file tree (⌘\\)"
-          onClick={onToggleFileTree}
+          className={`title-icon-btn ${sidebarOpen ? 'active' : ''}`}
+          title="切换侧边栏 (⌘\\)"
+          onClick={onToggleSidebar}
         >
           <SidebarIcon />
         </button>
@@ -116,16 +135,6 @@ function ChevronDownIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginLeft: 4, opacity: 0.6 }}>
       <polyline points="3,5 6,8 9,5" />
-    </svg>
-  )
-}
-
-function OutlineIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <line x1="3" y1="4" x2="13" y2="4" />
-      <line x1="5" y1="8" x2="13" y2="8" />
-      <line x1="7" y1="12" x2="13" y2="12" />
     </svg>
   )
 }
