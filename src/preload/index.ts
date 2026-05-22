@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSettings, DesktopApi, OpenResult, RecentFile, SaveResult } from '../shared/types.js'
+import type { AppSettings, DesktopApi, DirEntry, OpenResult, RecentFile, SaveResult } from '../shared/types.js'
 
 const api: DesktopApi = {
   file: {
@@ -18,6 +18,7 @@ const api: DesktopApi = {
     saveFileAs: (input) => ipcRenderer.invoke('file:saveAs', input) as Promise<SaveResult>,
     readRecentFiles: () => ipcRenderer.invoke('file:recent') as Promise<RecentFile[]>,
     clearRecentFiles: () => ipcRenderer.invoke('file:clearRecent') as Promise<void>,
+    listDir: (p) => ipcRenderer.invoke('file:listDir', p) as Promise<DirEntry[]>,
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get') as Promise<AppSettings>,

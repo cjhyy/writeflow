@@ -6,10 +6,23 @@ interface TitleBarProps {
   onOpenRecent: (filePath: string) => void
   onNew: () => void
   onOpen: () => void
+  onToggleFileTree: () => void
+  onToggleOutline: () => void
+  fileTreeOpen: boolean
+  outlineOpen: boolean
   scrolled: boolean
 }
 
-export function TitleBar({ onOpenRecent, onNew, onOpen, scrolled }: TitleBarProps) {
+export function TitleBar({
+  onOpenRecent,
+  onNew,
+  onOpen,
+  onToggleFileTree,
+  onToggleOutline,
+  fileTreeOpen,
+  outlineOpen,
+  scrolled,
+}: TitleBarProps) {
   const { fileName, dirty } = useDocStore()
   const [recent, setRecent] = useState<RecentFile[]>([])
   const [menuOpen, setMenuOpen] = useState(false)
@@ -27,9 +40,19 @@ export function TitleBar({ onOpenRecent, onNew, onOpen, scrolled }: TitleBarProp
 
   return (
     <div className={`title-bar ${scrolled ? 'scrolled' : ''}`}>
-      <div ref={menuRef} className="interactive relative">
+      {/* Left: file tree toggle */}
+      <button
+        className={`title-icon-btn interactive ${fileTreeOpen ? 'active' : ''}`}
+        title="Toggle file tree (⌘\\)"
+        onClick={onToggleFileTree}
+      >
+        <SidebarIcon side="left" />
+      </button>
+
+      {/* Center: filename + recent dropdown */}
+      <div ref={menuRef} className="interactive relative flex-1 flex items-center justify-center">
         <button
-          className="px-2 py-1 hover:bg-neutral-200 rounded"
+          className="px-2 py-1 hover:bg-neutral-200 rounded text-[12px]"
           onClick={() => setMenuOpen((v) => !v)}
         >
           {fileName}
@@ -56,6 +79,24 @@ export function TitleBar({ onOpenRecent, onNew, onOpen, scrolled }: TitleBarProp
           </div>
         )}
       </div>
+
+      {/* Right: outline toggle */}
+      <button
+        className={`title-icon-btn interactive ${outlineOpen ? 'active' : ''}`}
+        title="Toggle outline (⌘⇧1)"
+        onClick={onToggleOutline}
+      >
+        <SidebarIcon side="right" />
+      </button>
     </div>
+  )
+}
+
+function SidebarIcon({ side }: { side: 'left' | 'right' }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <line x1={side === 'left' ? '6' : '10'} y1="3" x2={side === 'left' ? '6' : '10'} y2="13" />
+    </svg>
   )
 }

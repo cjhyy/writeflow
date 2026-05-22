@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { OpenResult, RecentFile, SaveResult } from '../shared/types.js'
+import type { DirEntry, OpenResult, RecentFile, SaveResult } from '../shared/types.js'
 
 const RECENT_LIMIT = 20
 
@@ -133,4 +133,18 @@ export function registerFileHandlers() {
 
   ipcMain.handle('file:recent', readRecentFiles)
   ipcMain.handle('file:clearRecent', clearRecent)
+
+  ipcMain.handle('file:listDir', async (_e, filePath: string): Promise<DirEntry[]> => {
+    try {
+      const dir = path.dirname(filePath)
+      const names = await fs.readdir(dir)
+      return names
+        .filter((n) => /\.(md|markdown)$/i.test(n))
+        .filter((n) => !n.startsWith('.'))
+        .sort((a, b) => a.localeCompare(b))
+        .map((name) => ({ filePath: path.join(dir, name), fileName: name }))
+    } catch {
+      return []
+    }
+  })
 }

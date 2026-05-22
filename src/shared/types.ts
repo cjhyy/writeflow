@@ -39,6 +39,11 @@ export interface OpenResult {
   cancelled?: boolean
 }
 
+export interface DirEntry {
+  filePath: string
+  fileName: string
+}
+
 export interface DesktopApi {
   file: {
     newFile: () => Promise<DocumentState>
@@ -48,6 +53,7 @@ export interface DesktopApi {
     saveFileAs: (input: { content: string; suggestedName?: string }) => Promise<SaveResult>
     readRecentFiles: () => Promise<RecentFile[]>
     clearRecentFiles: () => Promise<void>
+    listDir: (filePath: string) => Promise<DirEntry[]>
   }
   settings: {
     get: () => Promise<AppSettings>

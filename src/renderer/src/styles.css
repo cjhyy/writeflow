@@ -3,12 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --bg: #fafafa;
+  --bg: #ffffff;
+  --bg-sidebar: #f6f7f9;
   --bg-elevated: #ffffff;
   --text: #1a1a1a;
   --text-muted: #6b7280;
-  --border: #e5e5e5;
+  --text-faint: #9ca3af;
+  --border: #ececec;
+  --border-soft: #f0f0f0;
   --accent: #2563eb;
+  --row-hover: #f3f4f6;
+  --row-active: #eef2ff;
 }
 
 * {
@@ -130,6 +135,30 @@ body {
 .title-bar .interactive *,
 .title-bar button {
   -webkit-app-region: no-drag;
+}
+
+.title-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-faint);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.title-icon-btn:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+.title-icon-btn.active {
+  color: var(--accent);
+  background: var(--row-active);
 }
 
 .dirty-dot {
