@@ -30,6 +30,8 @@ function createWindow() {
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    // Auto-open DevTools in dev so console errors are visible without ⌥⌘I
+    mainWindow.webContents.openDevTools({ mode: 'right' })
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }

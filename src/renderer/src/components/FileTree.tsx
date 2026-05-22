@@ -49,10 +49,22 @@ export function FileTree({ activeFilePath, onSelect }: FileTreeProps) {
   }, [folder])
 
   async function openFolder() {
-    const res = await window.api.file.openFolder()
-    if (res.ok && res.folder) {
-      setFolder(res.folder)
-      setEntries(res.entries ?? [])
+    try {
+      if (!window.api?.file?.openFolder) {
+        console.error('[FileTree] window.api.file.openFolder is undefined — preload not reloaded? Restart `npm run dev`.')
+        alert('打开文件夹功能未就绪。请完整重启 dev 服务（停止后重新 npm run dev）。')
+        return
+      }
+      console.log('[FileTree] invoking openFolder…')
+      const res = await window.api.file.openFolder()
+      console.log('[FileTree] openFolder result:', res)
+      if (res.ok && res.folder) {
+        setFolder(res.folder)
+        setEntries(res.entries ?? [])
+      }
+    } catch (err) {
+      console.error('[FileTree] openFolder failed:', err)
+      alert(`打开文件夹失败：${(err as Error).message}`)
     }
   }
 
