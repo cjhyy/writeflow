@@ -4,6 +4,7 @@ import type {
   DesktopApi,
   DirEntry,
   ExportPdfResult,
+  FormatAction,
   OpenResult,
   RecentFile,
   SaveImageResult,
@@ -39,10 +40,14 @@ const api: DesktopApi = {
     listFolder: (f) => ipcRenderer.invoke('file:listFolder', f) as Promise<DirEntry[]>,
     saveImage: (input) => ipcRenderer.invoke('file:saveImage', input) as Promise<SaveImageResult>,
     exportPdf: (input) => ipcRenderer.invoke('file:exportPdf', input) as Promise<ExportPdfResult>,
+    exportHtml: (input) => ipcRenderer.invoke('file:exportHtml', input) as Promise<ExportPdfResult>,
+    revealInFinder: (p) => ipcRenderer.invoke('shell:revealInFinder', p) as Promise<{ ok: boolean; error?: string }>,
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get') as Promise<AppSettings>,
     update: (patch) => ipcRenderer.invoke('settings:update', patch) as Promise<AppSettings>,
+    getApiKey: () => ipcRenderer.invoke('settings:getApiKey') as Promise<string>,
+    setApiKey: (key) => ipcRenderer.invoke('settings:setApiKey', key) as Promise<{ ok: boolean; error?: string }>,
   },
   on: {
     menuNew: (cb) => onChannel('menu:new', cb),
@@ -67,6 +72,30 @@ const api: DesktopApi = {
         ipcRenderer.removeListener('menu:themeLight', hLight)
         ipcRenderer.removeListener('menu:themeDark', hDark)
         ipcRenderer.removeListener('menu:themeSepia', hSepia)
+      }
+    },
+    menuPreferences: (cb) => onChannel('menu:preferences', cb),
+    menuOpenFolder: (cb) => onChannel('menu:openFolder', cb),
+    menuRevealInFinder: (cb) => onChannel('menu:revealInFinder', cb),
+    menuExportHtml: (cb) => onChannel('menu:exportHtml', cb),
+    menuFormat: (cb) => {
+      const map: Record<string, FormatAction> = {
+        'menu:fmtH1': 'h1', 'menu:fmtH2': 'h2', 'menu:fmtH3': 'h3', 'menu:fmtH4': 'h4',
+        'menu:fmtParagraph': 'paragraph', 'menu:fmtBlockquote': 'blockquote',
+        'menu:fmtOL': 'ol', 'menu:fmtUL': 'ul', 'menu:fmtTask': 'task',
+        'menu:fmtCodeBlock': 'codeBlock', 'menu:fmtTable': 'table', 'menu:fmtHr': 'hr',
+        'menu:fmtBold': 'bold', 'menu:fmtItalic': 'italic', 'menu:fmtStrike': 'strike',
+        'menu:fmtInlineCode': 'inlineCode', 'menu:fmtLink': 'link', 'menu:fmtImage': 'image',
+        'menu:fmtClear': 'clear',
+      }
+      const handlers: Array<[string, () => void]> = []
+      for (const [channel, action] of Object.entries(map)) {
+        const h = () => cb(action)
+        ipcRenderer.on(channel, h)
+        handlers.push([channel, h])
+      }
+      return () => {
+        for (const [channel, h] of handlers) ipcRenderer.removeListener(channel, h)
       }
     },
   },

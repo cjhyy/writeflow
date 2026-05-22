@@ -15,11 +15,18 @@ export interface RecentFile {
 }
 
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'system'
+  theme: 'light' | 'dark' | 'sepia'
   autoSave: boolean
   autoSaveDelayMs: number
   editorFontSize: number
   editorLineHeight: number
+  editorFontFamily: string
+  focusModeDefault: boolean
+  typewriterDefault: boolean
+  aiProvider: 'openrouter' | 'openai' | 'custom'
+  aiBaseUrl: string
+  aiModel: string
+  /** apiKey is NOT stored here — fetch via api.settings.getApiKey() */
 }
 
 export interface SaveResult {
@@ -72,10 +79,14 @@ export interface DesktopApi {
     listFolder: (folder: string) => Promise<DirEntry[]>
     saveImage: (input: { docPath: string | null; bytes: ArrayBuffer; ext: string }) => Promise<SaveImageResult>
     exportPdf: (input: { suggestedName?: string }) => Promise<ExportPdfResult>
+    exportHtml: (input: { suggestedName?: string; html: string }) => Promise<ExportPdfResult>
+    revealInFinder: (filePath: string) => Promise<{ ok: boolean; error?: string }>
   }
   settings: {
     get: () => Promise<AppSettings>
     update: (patch: Partial<AppSettings>) => Promise<AppSettings>
+    getApiKey: () => Promise<string>
+    setApiKey: (key: string) => Promise<{ ok: boolean; error?: string }>
   }
   on: {
     menuNew: (cb: () => void) => () => void
@@ -89,8 +100,22 @@ export interface DesktopApi {
     menuToggleFocusMode: (cb: () => void) => () => void
     menuToggleTypewriter: (cb: () => void) => () => void
     menuTheme: (cb: (t: ThemeName) => void) => () => void
+    menuPreferences: (cb: () => void) => () => void
+    menuOpenFolder: (cb: () => void) => () => void
+    menuRevealInFinder: (cb: () => void) => () => void
+    menuExportHtml: (cb: () => void) => () => void
+    menuFormat: (cb: (action: FormatAction) => void) => () => void
   }
 }
+
+export type FormatAction =
+  | 'h1' | 'h2' | 'h3' | 'h4'
+  | 'paragraph' | 'blockquote'
+  | 'ol' | 'ul' | 'task'
+  | 'codeBlock' | 'table' | 'hr'
+  | 'bold' | 'italic' | 'strike'
+  | 'inlineCode' | 'link' | 'image'
+  | 'clear'
 
 declare global {
   interface Window {

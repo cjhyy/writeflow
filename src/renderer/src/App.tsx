@@ -4,6 +4,7 @@ import { FileTree } from './components/FileTree'
 import { FindBar } from './components/FindBar'
 import { HtmlPreview } from './components/HtmlPreview'
 import { Outline } from './components/Outline'
+import { PreferencesModal } from './components/PreferencesModal'
 import { ScrollToTop } from './components/ScrollToTop'
 import { TitleBar } from './components/TitleBar'
 import { useDocStore } from './stores/document-store'
@@ -17,6 +18,7 @@ export function App() {
   const [scrolled, setScrolled] = useState(false)
   const [fileTreeOpen, setFileTreeOpen] = useState(false)
   const [outlineOpen, setOutlineOpen] = useState(false)
+  const [prefsOpen, setPrefsOpen] = useState(false)
   // Using a state ref so children that mount after the scroller (FindBar,
   // ScrollToTop) get a stable, current DOM reference instead of a stale null.
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null)
@@ -27,6 +29,19 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  // Load persisted settings on mount; pipe theme + font + line-height into
+  // the renderer state and into CSS custom properties.
+  useEffect(() => {
+    window.api.settings.get().then((s) => {
+      setTheme(s.theme)
+      const root = document.documentElement
+      root.style.setProperty('--editor-font-size', `${s.editorFontSize}px`)
+      root.style.setProperty('--editor-line-height', String(s.editorLineHeight))
+    })
+    const unsub = window.api.on.menuPreferences(() => setPrefsOpen(true))
+    return unsub
+  }, [setTheme])
 
   const scheduleAutosave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -226,6 +241,7 @@ export function App() {
           <Outline markdown={doc.content} onJump={handleOutlineJump} />
         )}
       </div>
+      {prefsOpen && <PreferencesModal onClose={() => setPrefsOpen(false)} />}
     </div>
   )
 }

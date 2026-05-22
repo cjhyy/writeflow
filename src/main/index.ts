@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { registerFileHandlers } from './file-service.js'
@@ -57,6 +57,32 @@ app.whenReady().then(() => {
     })
     return ['save', 'discard', 'cancel'][response]
   })
+
+  ipcMain.handle('shell:revealInFinder', async (_e, filePath: string) => {
+    if (!filePath) return { ok: false, error: 'no path' }
+    shell.showItemInFolder(filePath)
+    return { ok: true }
+  })
+
+  ipcMain.handle(
+    'file:exportHtml',
+    async (e, { suggestedName, html }: { suggestedName?: string; html: string }): Promise<{ ok: boolean; filePath?: string; error?: string }> => {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      if (!win) return { ok: false, error: 'no window' }
+      const save = await dialog.showSaveDialog(win, {
+        defaultPath: (suggestedName ?? 'document').replace(/\.md$/, '') + '.html',
+        filters: [{ name: 'HTML', extensions: ['html'] }],
+      })
+      if (save.canceled || !save.filePath) return { ok: false, error: 'cancelled' }
+      try {
+        const fs = await import('node:fs/promises')
+        await fs.writeFile(save.filePath, html, 'utf-8')
+        return { ok: true, filePath: save.filePath }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+  )
 
   ipcMain.handle(
     'file:exportPdf',

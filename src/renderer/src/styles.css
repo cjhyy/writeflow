@@ -77,13 +77,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Typora-style writing surface */
+/* Typora-style writing surface — font-size / line-height driven by settings */
 .writing-surface {
   max-width: 800px;
   margin: 0 auto;
   padding: 3rem 3rem 12rem;
-  font-size: 17px;
-  line-height: 1.85;
+  font-size: var(--editor-font-size, 17px);
+  line-height: var(--editor-line-height, 1.85);
 }
 
 /* Milkdown Crepe overrides — quiet the default chrome to match Typora's calm */
@@ -94,8 +94,8 @@ body {
 .milkdown .ProseMirror {
   outline: none;
   padding: 0 !important;
-  font-size: 17px;
-  line-height: 1.85;
+  font-size: var(--editor-font-size, 17px);
+  line-height: var(--editor-line-height, 1.85);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
 }
@@ -513,6 +513,249 @@ mark.find-hit.current {
 .is-focus .ProseMirror > *:has(.focus-current),
 .is-focus .ProseMirror .focus-current {
   opacity: 1;
+}
+
+/* Preferences modal */
+.prefs-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.prefs-card {
+  width: 640px;
+  max-width: 90vw;
+  height: 500px;
+  max-height: 90vh;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.prefs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.prefs-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.prefs-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.prefs-close:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+.prefs-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.prefs-tabs {
+  width: 140px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-soft);
+}
+
+.prefs-tab {
+  text-align: left;
+  padding: 7px 12px;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.prefs-tab:hover {
+  background: var(--row-hover);
+}
+
+.prefs-tab.active {
+  background: var(--row-active);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.prefs-form {
+  flex: 1;
+  padding: 18px 22px;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.prefs-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.prefs-row:last-child {
+  border-bottom: none;
+}
+
+.prefs-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.prefs-row-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.prefs-row-control input[type='text'],
+.prefs-row-control input[type='password'],
+.prefs-row-control select {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.prefs-row-control input[type='text']:focus,
+.prefs-row-control input[type='password']:focus,
+.prefs-row-control select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prefs-row-control input[type='range'] {
+  width: 100%;
+}
+
+.prefs-row-control input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.prefs-key-row {
+  display: flex;
+  gap: 6px;
+}
+
+.prefs-key-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.prefs-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prefs-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.prefs-btn.ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.prefs-btn.ghost:hover:not(:disabled) {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+.prefs-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.prefs-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.prefs-note {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 10px 12px;
+  background: var(--row-hover);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.prefs-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.prefs-about h3 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.prefs-version {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.prefs-about a {
+  color: var(--accent);
+  text-decoration: none;
 }
 
 /* Outline flash */
