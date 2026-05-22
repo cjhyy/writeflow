@@ -40,13 +40,20 @@ export function TitleBar({
 
   return (
     <div className={`title-bar ${scrolled ? 'scrolled' : ''}`}>
-      {/* Left: file tree toggle */}
+      {/* Left: file tree toggle + new file */}
       <button
         className={`title-icon-btn interactive ${fileTreeOpen ? 'active' : ''}`}
         title="Toggle file tree (⌘\\)"
         onClick={onToggleFileTree}
       >
         <SidebarIcon side="left" />
+      </button>
+      <button
+        className="title-icon-btn interactive"
+        title="New file (⌘N)"
+        onClick={onNew}
+      >
+        <NewFileIcon />
       </button>
 
       {/* Center: filename + recent dropdown */}
@@ -97,6 +104,17 @@ function SidebarIcon({ side }: { side: 'left' | 'right' }) {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="3" width="12" height="10" rx="1.5" />
       <line x1={side === 'left' ? '6' : '10'} y1="3" x2={side === 'left' ? '6' : '10'} y2="13" />
+    </svg>
+  )
+}
+
+function NewFileIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M4 2h5l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
+      <path d="M9 2v3h3" />
+      <line x1="7.5" y1="8" x2="7.5" y2="12" />
+      <line x1="5.5" y1="10" x2="9.5" y2="10" />
     </svg>
   )
 }

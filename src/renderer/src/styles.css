@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme='light'] {
   --bg: #ffffff;
   --bg-sidebar: #f6f7f9;
   --bg-elevated: #ffffff;
@@ -14,6 +15,48 @@
   --accent: #2563eb;
   --row-hover: #f3f4f6;
   --row-active: #eef2ff;
+  --code-bg: #f3f4f6;
+  --find-hit-bg: #fff3a3;
+  --find-hit-current: #ffb86b;
+}
+
+[data-theme='dark'] {
+  --bg: #1a1a1a;
+  --bg-sidebar: #232323;
+  --bg-elevated: #2a2a2a;
+  --text: #e8e8e8;
+  --text-muted: #a3a3a3;
+  --text-faint: #6b7280;
+  --border: #333333;
+  --border-soft: #2a2a2a;
+  --accent: #60a5fa;
+  --row-hover: #2a2a2a;
+  --row-active: #1f2937;
+  --code-bg: #2a2a2a;
+  --find-hit-bg: #5a4a18;
+  --find-hit-current: #a76a2b;
+}
+
+[data-theme='sepia'] {
+  --bg: #f6efe1;
+  --bg-sidebar: #efe6d3;
+  --bg-elevated: #faf4e6;
+  --text: #3b2f1f;
+  --text-muted: #6b5d44;
+  --text-faint: #9a8c70;
+  --border: #d9cba8;
+  --border-soft: #e5d8b7;
+  --accent: #8b5a2b;
+  --row-hover: #ece1c6;
+  --row-active: #e3d4ad;
+  --code-bg: #ece1c6;
+  --find-hit-bg: #f0d27a;
+  --find-hit-current: #d99437;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 * {
@@ -90,13 +133,13 @@ body {
 .milkdown .ProseMirror code {
   font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
   font-size: 0.9em;
-  background: #f3f4f6;
+  background: var(--code-bg);
   padding: 0.15em 0.4em;
   border-radius: 4px;
 }
 
 .milkdown .ProseMirror pre {
-  background: #f6f8fa;
+  background: var(--code-bg);
   border-radius: 8px;
   padding: 1em;
   overflow-x: auto;
@@ -219,4 +262,99 @@ body {
   display: block;
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* Status bar */
+.status-bar {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Find bar */
+.find-bar {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.find-bar input {
+  width: 200px;
+  font-size: 12px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+}
+
+.find-bar-count {
+  font-size: 11px;
+  color: var(--text-faint);
+  min-width: 60px;
+}
+
+.find-bar button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.find-bar button:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+mark.find-hit {
+  background: var(--find-hit-bg);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+mark.find-hit.current {
+  background: var(--find-hit-current);
+}
+
+/* Focus mode — dim paragraphs that don't contain the caret */
+.is-focus .ProseMirror > * {
+  transition: opacity 0.2s;
+  opacity: 0.35;
+}
+
+.is-focus .ProseMirror > .focus-current,
+.is-focus .ProseMirror > *:has(.focus-current),
+.is-focus .ProseMirror .focus-current {
+  opacity: 1;
+}
+
+/* Outline flash */
+@keyframes outline-flash {
+  0% { background: transparent; }
+  20% { background: var(--row-active); }
+  100% { background: transparent; }
+}
+
+.outline-flash {
+  animation: outline-flash 0.9s ease-out;
 }

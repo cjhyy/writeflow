@@ -1,20 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Editor } from './components/Editor'
 import { FileTree } from './components/FileTree'
+import { FindBar } from './components/FindBar'
 import { HtmlPreview } from './components/HtmlPreview'
 import { Outline } from './components/Outline'
+import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { useDocStore } from './stores/document-store'
+import { useUiStore } from './stores/ui-store'
 
 const AUTOSAVE_DELAY_MS = 1500
 
 export function App() {
   const doc = useDocStore()
+  const { theme, focusMode, typewriterMode, findOpen, setTheme, toggleFocusMode, toggleTypewriterMode, setFindOpen } = useUiStore()
   const [scrolled, setScrolled] = useState(false)
   const [fileTreeOpen, setFileTreeOpen] = useState(false)
   const [outlineOpen, setOutlineOpen] = useState(false)
   const editorScrollRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Apply theme to root so CSS variables pick up the right palette
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
 
   const scheduleAutosave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -29,9 +38,7 @@ export function App() {
   const doSave = useCallback(async (): Promise<boolean> => {
     const s = useDocStore.getState()
     if (s.isHtmlPreview) return false
-    if (!s.filePath) {
-      return doSaveAs()
-    }
+    if (!s.filePath) return doSaveAs()
     const res = await window.api.file.saveFile({ filePath: s.filePath, content: s.content })
     if (res.ok && res.filePath && res.fileName) {
       useDocStore.getState().markSaved(res.filePath, res.fileName, s.content)
@@ -99,16 +106,30 @@ export function App() {
     [confirmDiscardIfDirty],
   )
 
-  // Menu bindings (File menu in native menubar)
-  useEffect(() => {
-    const u1 = window.api.on.menuNew(doNew)
-    const u2 = window.api.on.menuOpen(doOpen)
-    const u3 = window.api.on.menuSave(() => { void doSave() })
-    const u4 = window.api.on.menuSaveAs(() => { void doSaveAs() })
-    return () => { u1(); u2(); u3(); u4() }
-  }, [doNew, doOpen, doSave, doSaveAs])
+  const doExportPdf = useCallback(async () => {
+    const s = useDocStore.getState()
+    await window.api.file.exportPdf({ suggestedName: s.fileName })
+  }, [])
 
-  // Sidebar shortcuts: Cmd+\ for file tree, Cmd+Shift+1 for outline
+  // Menu bindings
+  useEffect(() => {
+    const u = [
+      window.api.on.menuNew(doNew),
+      window.api.on.menuOpen(doOpen),
+      window.api.on.menuSave(() => { void doSave() }),
+      window.api.on.menuSaveAs(() => { void doSaveAs() }),
+      window.api.on.menuExportPdf(() => { void doExportPdf() }),
+      window.api.on.menuFind(() => setFindOpen(true)),
+      window.api.on.menuToggleFileTree(() => setFileTreeOpen((v) => !v)),
+      window.api.on.menuToggleOutline(() => setOutlineOpen((v) => !v)),
+      window.api.on.menuToggleFocusMode(() => toggleFocusMode()),
+      window.api.on.menuToggleTypewriter(() => toggleTypewriterMode()),
+      window.api.on.menuTheme((t) => setTheme(t)),
+    ]
+    return () => u.forEach((fn) => fn())
+  }, [doNew, doOpen, doSave, doSaveAs, doExportPdf, setFindOpen, toggleFocusMode, toggleTypewriterMode, setTheme])
+
+  // Keyboard fallbacks (also handled by native menu, but here for in-renderer focus)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!e.metaKey && !e.ctrlKey) return
@@ -116,14 +137,16 @@ export function App() {
         e.preventDefault()
         setFileTreeOpen((v) => !v)
       } else if (e.shiftKey && e.key === '!') {
-        // Cmd+Shift+1 → "!" on US layout
         e.preventDefault()
         setOutlineOpen((v) => !v)
+      } else if (e.key === 'f' && !e.shiftKey) {
+        e.preventDefault()
+        setFindOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setFindOpen])
 
   // Autosave on content change
   useEffect(() => {
@@ -142,9 +165,6 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // Scroll to a heading by visible text. We re-scan the rendered ProseMirror
-  // headings rather than rely on id attributes, because Crepe doesn't always
-  // emit slugs that match remark's.
   const handleOutlineJump = useCallback((_slug: string, text: string) => {
     const scroller = editorScrollRef.current
     if (!scroller) return
@@ -153,13 +173,15 @@ export function App() {
       if (h.textContent?.trim() === text) {
         const top = h.offsetTop - 40
         scroller.scrollTo({ top, behavior: 'smooth' })
+        h.classList.add('outline-flash')
+        setTimeout(() => h.classList.remove('outline-flash'), 900)
         return
       }
     }
   }, [])
 
   return (
-    <div className="h-full flex flex-col">
+    <div className={`h-full flex flex-col ${focusMode ? 'is-focus' : ''} ${typewriterMode ? 'is-typewriter' : ''}`}>
       <TitleBar
         onOpenRecent={doOpenByPath}
         onNew={doNew}
@@ -171,28 +193,33 @@ export function App() {
         scrolled={scrolled}
       />
       <div className="flex-1 min-h-0 flex">
-        {fileTreeOpen && (
-          <FileTree activeFilePath={doc.filePath} onSelect={doOpenByPath} />
-        )}
-        <div
-          ref={editorScrollRef}
-          className="flex-1 min-w-0 overflow-y-auto"
-          onScroll={(e) => setScrolled((e.target as HTMLDivElement).scrollTop > 4)}
-        >
-          {doc.isHtmlPreview ? (
-            <HtmlPreview content={doc.content} />
-          ) : (
-            <Editor
-              key={doc.filePath ?? 'untitled'}
-              value={doc.savedContent}
-              onChange={(v) => useDocStore.getState().setContent(v)}
-            />
+        {fileTreeOpen && <FileTree activeFilePath={doc.filePath} onSelect={doOpenByPath} />}
+        <div className="flex-1 min-w-0 flex flex-col relative">
+          {findOpen && (
+            <FindBar scrollContainer={editorScrollRef.current} onClose={() => setFindOpen(false)} />
           )}
+          <div
+            ref={editorScrollRef}
+            data-editor-scroll
+            className="flex-1 min-h-0 overflow-y-auto"
+            onScroll={(e) => setScrolled((e.target as HTMLDivElement).scrollTop > 4)}
+          >
+            {doc.isHtmlPreview ? (
+              <HtmlPreview content={doc.content} />
+            ) : (
+              <Editor
+                key={doc.filePath ?? 'untitled'}
+                value={doc.savedContent}
+                onChange={(v) => useDocStore.getState().setContent(v)}
+              />
+            )}
+          </div>
         </div>
         {outlineOpen && !doc.isHtmlPreview && (
           <Outline markdown={doc.content} onJump={handleOutlineJump} />
         )}
       </div>
+      <StatusBar />
     </div>
   )
 }

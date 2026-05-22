@@ -44,6 +44,20 @@ export interface DirEntry {
   fileName: string
 }
 
+export interface SaveImageResult {
+  ok: boolean
+  mdPath?: string
+  error?: string
+}
+
+export interface ExportPdfResult {
+  ok: boolean
+  filePath?: string
+  error?: string
+}
+
+export type ThemeName = 'light' | 'dark' | 'sepia'
+
 export interface DesktopApi {
   file: {
     newFile: () => Promise<DocumentState>
@@ -54,6 +68,8 @@ export interface DesktopApi {
     readRecentFiles: () => Promise<RecentFile[]>
     clearRecentFiles: () => Promise<void>
     listDir: (filePath: string) => Promise<DirEntry[]>
+    saveImage: (input: { docPath: string | null; bytes: ArrayBuffer; ext: string }) => Promise<SaveImageResult>
+    exportPdf: (input: { suggestedName?: string }) => Promise<ExportPdfResult>
   }
   settings: {
     get: () => Promise<AppSettings>
@@ -64,6 +80,13 @@ export interface DesktopApi {
     menuOpen: (cb: () => void) => () => void
     menuSave: (cb: () => void) => () => void
     menuSaveAs: (cb: () => void) => () => void
+    menuExportPdf: (cb: () => void) => () => void
+    menuFind: (cb: () => void) => () => void
+    menuToggleFileTree: (cb: () => void) => () => void
+    menuToggleOutline: (cb: () => void) => () => void
+    menuToggleFocusMode: (cb: () => void) => () => void
+    menuToggleTypewriter: (cb: () => void) => () => void
+    menuTheme: (cb: (t: ThemeName) => void) => () => void
   }
 }
 

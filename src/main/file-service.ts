@@ -147,4 +147,39 @@ export function registerFileHandlers() {
       return []
     }
   })
+
+  /**
+   * Save a pasted/dropped image next to the current document under ./assets/.
+   * Returns the relative path to insert into the markdown.
+   *
+   * If the document has no path yet (Untitled), we use app userData/scratch/ as
+   * a fallback and return an absolute file:// URL.
+   */
+  ipcMain.handle(
+    'file:saveImage',
+    async (
+      _e,
+      { docPath, bytes, ext }: { docPath: string | null; bytes: ArrayBuffer; ext: string },
+    ): Promise<{ ok: boolean; mdPath?: string; error?: string }> => {
+      try {
+        const safeExt = ext.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'png'
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const fileName = `image-${stamp}.${safeExt}`
+        let assetsDir: string
+        let mdPath: string
+        if (docPath) {
+          assetsDir = path.join(path.dirname(docPath), 'assets')
+          mdPath = `./assets/${fileName}`
+        } else {
+          assetsDir = path.join(app.getPath('userData'), 'scratch', 'assets')
+          mdPath = `file://${path.join(assetsDir, fileName)}`
+        }
+        await fs.mkdir(assetsDir, { recursive: true })
+        await fs.writeFile(path.join(assetsDir, fileName), Buffer.from(bytes))
+        return { ok: true, mdPath }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+  )
 }

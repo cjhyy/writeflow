@@ -56,6 +56,31 @@ app.whenReady().then(() => {
     return ['save', 'discard', 'cancel'][response]
   })
 
+  ipcMain.handle(
+    'file:exportPdf',
+    async (e, { suggestedName }: { suggestedName?: string }): Promise<{ ok: boolean; filePath?: string; error?: string }> => {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      if (!win) return { ok: false, error: 'no window' }
+      const save = await dialog.showSaveDialog(win, {
+        defaultPath: (suggestedName ?? 'document').replace(/\.md$/, '') + '.pdf',
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+      if (save.canceled || !save.filePath) return { ok: false, error: 'cancelled' }
+      try {
+        const pdfData = await win.webContents.printToPDF({
+          printBackground: true,
+          pageSize: 'A4',
+          margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+        })
+        const fs = await import('node:fs/promises')
+        await fs.writeFile(save.filePath, pdfData)
+        return { ok: true, filePath: save.filePath }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+  )
+
   createWindow()
   buildMenu(() => mainWindow)
 
