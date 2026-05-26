@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { registerFileHandlers } from './file-service.js'
 import { registerSettingsHandlers } from './settings-service.js'
+import { registerAgentHandlers } from './agent/index.js'
 import { buildMenu } from './menu.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -62,6 +63,7 @@ function createWindow() {
 app.whenReady().then(() => {
   registerFileHandlers()
   registerSettingsHandlers()
+  registerAgentHandlers(() => mainWindow)
 
   ipcMain.handle('app:takePendingOpen', () => {
     const p = pendingOpenPath

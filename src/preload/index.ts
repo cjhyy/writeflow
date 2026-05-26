@@ -11,6 +11,13 @@ import type {
   SaveResult,
   ThemeName,
 } from '../shared/types.js'
+import type {
+  AiEvent,
+  AiPermissionResponse,
+  AiRunHandle,
+  AiRunInput,
+  AiTestConnectionResult,
+} from '../shared/ai-types.js'
 
 function onChannel(channel: string, cb: () => void) {
   const handler = () => cb()
@@ -49,6 +56,23 @@ const api: DesktopApi = {
     update: (patch) => ipcRenderer.invoke('settings:update', patch) as Promise<AppSettings>,
     getApiKey: () => ipcRenderer.invoke('settings:getApiKey') as Promise<string>,
     setApiKey: (key) => ipcRenderer.invoke('settings:setApiKey', key) as Promise<{ ok: boolean; error?: string }>,
+  },
+  ai: {
+    run: (input: AiRunInput) =>
+      ipcRenderer.invoke('ai:run', input) as Promise<AiRunHandle>,
+    cancel: (runId: string) => ipcRenderer.invoke('ai:cancel', runId) as Promise<void>,
+    respondPermission: (resp: AiPermissionResponse) =>
+      ipcRenderer.invoke('ai:permission', resp) as Promise<void>,
+    resetSession: (sessionId: string) =>
+      ipcRenderer.invoke('ai:resetSession', sessionId) as Promise<void>,
+    testConnection: () =>
+      ipcRenderer.invoke('ai:testConnection') as Promise<AiTestConnectionResult>,
+    flush: () => ipcRenderer.invoke('ai:flush') as Promise<void>,
+    onEvent: (cb: (e: AiEvent) => void) => {
+      const handler = (_: unknown, e: AiEvent) => cb(e)
+      ipcRenderer.on('ai:event', handler)
+      return () => ipcRenderer.removeListener('ai:event', handler)
+    },
   },
   on: {
     menuNew: (cb) => onChannel('menu:new', cb),

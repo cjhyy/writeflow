@@ -26,6 +26,8 @@ export interface AppSettings {
   aiProvider: 'openrouter' | 'openai' | 'custom'
   aiBaseUrl: string
   aiModel: string
+  /** Width of the right-side AI panel in px. Persisted across sessions. */
+  aiPanelWidth: number
   /** apiKey is NOT stored here — fetch via api.settings.getApiKey() */
 }
 
@@ -65,7 +67,24 @@ export interface ExportPdfResult {
 
 export type ThemeName = 'light' | 'dark' | 'sepia'
 
+import type {
+  AiEvent,
+  AiPermissionResponse,
+  AiRunHandle,
+  AiRunInput,
+  AiTestConnectionResult,
+} from './ai-types.js'
+
 export interface DesktopApi {
+  ai: {
+    run: (input: AiRunInput) => Promise<AiRunHandle>
+    cancel: (runId: string) => Promise<void>
+    respondPermission: (resp: AiPermissionResponse) => Promise<void>
+    resetSession: (sessionId: string) => Promise<void>
+    testConnection: () => Promise<AiTestConnectionResult>
+    flush: () => Promise<void>
+    onEvent: (cb: (e: AiEvent) => void) => () => void
+  }
   file: {
     newFile: () => Promise<DocumentState>
     openFile: () => Promise<OpenResult>

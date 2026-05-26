@@ -7,6 +7,12 @@ export default defineConfig({
     build: {
       outDir: 'out/main',
       lib: { entry: 'src/main/index.ts' },
+      rollupOptions: {
+        // The SDK uses dynamic `require('./openrouter-models.json')` and reads
+        // .md prompt sections relative to its own dist/ at runtime. Bundling
+        // breaks those lookups; keep it external so it loads from node_modules.
+        external: ['@cjhyy/code-shell-core', 'electron'],
+      },
     },
   },
   preload: {

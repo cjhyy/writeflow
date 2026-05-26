@@ -25,6 +25,8 @@ export function PreferencesModal({ onClose }: PreferencesModalProps) {
   const [apiKeyDirty, setApiKeyDirty] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [savingKey, setSavingKey] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
 
   useEffect(() => {
     window.api.settings.get().then(setSettings)
@@ -54,6 +56,10 @@ export function PreferencesModal({ onClose }: PreferencesModalProps) {
     if (key === 'editorLineHeight') {
       document.documentElement.style.setProperty('--editor-line-height', String(value))
     }
+    if (key === 'aiProvider' || key === 'aiBaseUrl' || key === 'aiModel') {
+      // Force the next AI run to rebuild its Engine with the new settings.
+      void window.api.ai.flush()
+    }
   }
 
   async function saveApiKey() {
@@ -61,8 +67,21 @@ export function PreferencesModal({ onClose }: PreferencesModalProps) {
     try {
       await window.api.settings.setApiKey(apiKey)
       setApiKeyDirty(false)
+      void window.api.ai.flush()
     } finally {
       setSavingKey(false)
+    }
+  }
+
+  async function testConnection() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await window.api.ai.testConnection()
+      if (res.ok) setTestResult(`✓ 连接成功 · ${res.latencyMs} ms`)
+      else setTestResult(`✗ ${res.error ?? '失败'}`)
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -226,8 +245,19 @@ export function PreferencesModal({ onClose }: PreferencesModalProps) {
                   </div>
                 </Row>
 
+                <Row label="连接测试" hint={testResult ?? '验证 API Key 是否生效'}>
+                  <button
+                    className="prefs-btn ghost"
+                    type="button"
+                    onClick={testConnection}
+                    disabled={testing || !apiKey || apiKeyDirty}
+                  >
+                    {testing ? '测试中…' : '测试'}
+                  </button>
+                </Row>
+
                 <p className="prefs-note">
-                  AI 调用逻辑（润色 / 续写 / 翻译）正在开发中。设置在此先存好，下一版本接入。
+                  支持的入口：选区浮动菜单（改写/扩写/翻译）、⌘J 续写、右侧 AI 对话面板。
                 </p>
               </>
             )}

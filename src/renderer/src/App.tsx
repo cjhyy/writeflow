@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Editor } from './components/Editor'
+import { Editor, getEditorSelectionText } from './components/Editor'
 import { FindBar } from './components/FindBar'
 import { HtmlPreview } from './components/HtmlPreview'
 import { PreferencesModal } from './components/PreferencesModal'
 import { ScrollToTop } from './components/ScrollToTop'
 import { Sidebar } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
+import { AIPanel } from './components/AIPanel'
+import { SelectionBubble } from './components/SelectionBubble'
 import { useDocStore } from './stores/document-store'
 import { useUiStore } from './stores/ui-store'
+import { useAiStore } from './stores/ai-store'
+import type { AiEvent } from '@shared/ai-types'
 
 const AUTOSAVE_DELAY_MS = 1500
 const SIDEBAR_KEY = 'writeflow.sidebar.open'
@@ -22,6 +26,11 @@ export function App() {
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null)
   const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [aiEpoch, setAiEpoch] = useState(0)
+  const [aiPanelWidth, setAiPanelWidth] = useState(360)
+  const [workspaceRoot] = useState<string | null>(null)
+  const aiPanelOpen = useAiStore((s) => s.panelOpen)
+  const toggleAiPanel = useAiStore((s) => s.togglePanel)
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? '1' : '0')
@@ -37,6 +46,7 @@ export function App() {
       const root = document.documentElement
       root.style.setProperty('--editor-font-size', `${s.editorFontSize}px`)
       root.style.setProperty('--editor-line-height', String(s.editorLineHeight))
+      if (s.aiPanelWidth) setAiPanelWidth(s.aiPanelWidth)
     })
     const unsub = window.api.on.menuPreferences(() => setPrefsOpen(true))
     return unsub
@@ -170,11 +180,19 @@ export function App() {
         e.preventDefault()
         setFindMode('replace')
         setFindOpen(true)
+      } else if (e.key === 'j') {
+        // ⌘J inside the editor is handled by Editor (continue-write).
+        // ⌘J elsewhere toggles the AI panel.
+        const inEditor = (e.target as HTMLElement)?.closest?.('.ProseMirror')
+        if (!inEditor) {
+          e.preventDefault()
+          toggleAiPanel()
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setFindOpen])
+  }, [setFindOpen, toggleAiPanel])
 
   useEffect(() => {
     if (doc.dirty) scheduleAutosave()
@@ -190,6 +208,38 @@ export function App() {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
+
+  // AI edits: bump epoch to remount the editor with the new markdown source.
+  const applyAiEdit = useCallback((newContent: string) => {
+    useDocStore.getState().setContent(newContent)
+    setAiEpoch((e) => e + 1)
+  }, [])
+
+  const onContinueWrite = useCallback(async (contextBefore: string) => {
+    const s = useDocStore.getState()
+    const { runId } = await window.api.ai.run({
+      intent: 'inline-continue',
+      message: '',
+      docContext: {
+        filePath: s.filePath,
+        content: s.content,
+        selectionText: '',
+        selection: { from: s.content.length, to: s.content.length },
+        workspaceRoot,
+      },
+    })
+    // Listen for the single propose_edit from this run, append to doc, dispose.
+    void contextBefore
+    const off = window.api.ai.onEvent((e: AiEvent) => {
+      if (e.runId !== runId) return
+      if (e.type === 'propose_edit') {
+        const cur = useDocStore.getState().content
+        const next = cur + (cur.endsWith('\n') ? '' : '\n') + e.edit.text
+        applyAiEdit(next)
+      }
+      if (e.type === 'done' || e.type === 'error') off()
+    })
+  }, [workspaceRoot, applyAiEdit])
 
   const handleOutlineJump = useCallback((text: string) => {
     const scroller = editorScrollRef.current
@@ -215,6 +265,8 @@ export function App() {
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         sidebarOpen={sidebarOpen}
         scrolled={scrolled}
+        aiPanelOpen={aiPanelOpen}
+        onToggleAiPanel={toggleAiPanel}
       />
       <div className="flex-1 min-h-0 flex">
         {sidebarOpen && (
@@ -246,15 +298,37 @@ export function App() {
               <HtmlPreview content={doc.content} />
             ) : (
               <Editor
-                key={doc.filePath ?? 'untitled'}
-                value={doc.savedContent}
+                key={`${doc.filePath ?? 'untitled'}-${aiEpoch}`}
+                value={doc.content}
                 onChange={(v) => useDocStore.getState().setContent(v)}
+                onContinueWrite={onContinueWrite}
               />
             )}
           </div>
           <ScrollToTop scroller={scrollerEl} />
         </div>
+        {aiPanelOpen && (
+          <div style={{ width: aiPanelWidth, flexShrink: 0 }}>
+            <AIPanel
+              onApplyEdit={applyAiEdit}
+              workspaceRoot={workspaceRoot}
+              getSelection={() => {
+                const text = getEditorSelectionText()
+                return { text, from: 0, to: text.length }
+              }}
+            />
+          </div>
+        )}
       </div>
+      <SelectionBubble
+        workspaceRoot={workspaceRoot}
+        onApplyEdit={applyAiEdit}
+        getRange={() => {
+          const text = getEditorSelectionText()
+          if (!text) return null
+          return { text, from: 0, to: text.length }
+        }}
+      />
       {prefsOpen && <PreferencesModal onClose={() => setPrefsOpen(false)} />}
     </div>
   )

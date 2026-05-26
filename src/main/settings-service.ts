@@ -15,6 +15,7 @@ const DEFAULTS: AppSettings = {
   aiProvider: 'openrouter',
   aiBaseUrl: 'https://openrouter.ai/api/v1',
   aiModel: 'anthropic/claude-sonnet-4',
+  aiPanelWidth: 360,
 }
 
 function settingsPath() {

@@ -8,6 +8,26 @@ import { useDocStore } from '../stores/document-store'
 interface EditorProps {
   value: string
   onChange: (v: string) => void
+  /** Optional ⌘J continuation handler — given the trailing context. */
+  onContinueWrite?: (contextBefore: string) => void
+}
+
+/**
+ * Read the user's current text selection inside the active ProseMirror, if
+ * any. Returns the plain text only — source-level offsets aren't available
+ * here, so callers do a text-based search-and-replace against the markdown
+ * source when applying an edit.
+ */
+export function getEditorSelectionText(): string {
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return ''
+  const range = sel.getRangeAt(0)
+  const el =
+    range.commonAncestorContainer.nodeType === 1
+      ? (range.commonAncestorContainer as Element)
+      : range.commonAncestorContainer.parentElement
+  if (!el?.closest('.ProseMirror')) return ''
+  return sel.toString()
 }
 
 /**
@@ -32,12 +52,39 @@ interface EditorProps {
  * The editor remounts on document switch via a `key` prop, so `value` is
  * read only on mount as the initial markdown.
  */
-export function Editor({ value, onChange }: EditorProps) {
+export function Editor({ value, onChange, onContinueWrite }: EditorProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const onChangeRef = useRef(onChange)
+  const onContinueRef = useRef(onContinueWrite)
   const focusMode = useUiStore((s) => s.focusMode)
   const typewriterMode = useUiStore((s) => s.typewriterMode)
+
+  useEffect(() => {
+    onContinueRef.current = onContinueWrite
+  })
+
+  // ⌘J / Ctrl+J inside the editor surface → continue-write at cursor.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 'j') return
+      const sel = window.getSelection()
+      const node = sel?.anchorNode
+      const el = node?.nodeType === 1 ? (node as Element) : node?.parentElement
+      if (!el?.closest('.ProseMirror')) return
+      e.preventDefault()
+      // We don't have an authoritative source offset, so the handler reads
+      // the trailing 800 chars of the doc content as proxy. App.tsx handles
+      // the actual run — this just delivers the doc tail.
+      const docContent = useDocStore.getState().content
+      const before = docContent.slice(Math.max(0, docContent.length - 800))
+      onContinueRef.current?.(before)
+    }
+    wrapper.addEventListener('keydown', onKey)
+    return () => wrapper.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -162,9 +209,8 @@ export function Editor({ value, onChange }: EditorProps) {
       if (!sel || sel.rangeCount === 0) return
       const node = sel.anchorNode
       if (!node) return
-      const block = (node.nodeType === 1 ? node : node.parentElement)?.closest(
-        'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre',
-      )
+      const startEl = (node.nodeType === 1 ? (node as Element) : node.parentElement) ?? null
+      const block = startEl?.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre')
       wrapper?.querySelectorAll('.focus-current').forEach((el) => el.classList.remove('focus-current'))
       block?.classList.add('focus-current')
     }
