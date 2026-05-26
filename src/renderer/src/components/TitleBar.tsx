@@ -11,6 +11,7 @@ interface TitleBarProps {
   scrolled: boolean
   aiPanelOpen: boolean
   onToggleAiPanel: () => void
+  onOpenPreferences: () => void
 }
 
 function countWords(text: string) {
@@ -29,6 +30,7 @@ export function TitleBar({
   scrolled,
   aiPanelOpen,
   onToggleAiPanel,
+  onOpenPreferences,
 }: TitleBarProps) {
   const { fileName, dirty, content } = useDocStore()
   const [recent, setRecent] = useState<RecentFile[]>([])
@@ -131,6 +133,13 @@ export function TitleBar({
           <SparkIcon />
         </button>
         <button
+          className="title-icon-btn"
+          title="偏好设置 (⌘,)"
+          onClick={onOpenPreferences}
+        >
+          <GearIcon />
+        </button>
+        <button
           className={`title-icon-btn ${sidebarOpen ? 'active' : ''}`}
           title="切换侧边栏 (⌘\\)"
           onClick={onToggleSidebar}
@@ -154,6 +163,15 @@ function SparkIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M8 2.5 L9.4 6.6 L13.5 8 L9.4 9.4 L8 13.5 L6.6 9.4 L2.5 8 L6.6 6.6 Z" />
+    </svg>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="8" cy="8" r="2.5" />
+      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" strokeLinecap="round" />
     </svg>
   )
 }
