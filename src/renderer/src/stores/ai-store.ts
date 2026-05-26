@@ -14,6 +14,8 @@
 import { create } from 'zustand'
 import type {
   AiEvent,
+  AiIntent,
+  AiOutlineSection,
   AiPermissionRequest,
   AiProposedEdit,
 } from '@shared/ai-types'
@@ -34,23 +36,35 @@ export interface PendingEdit {
   createdAt: number
 }
 
+export interface PendingOutline {
+  runId: string
+  title: string
+  sections: AiOutlineSection[]
+}
+
 interface AiStore {
   panelOpen: boolean
   sessionId: string
   messages: ChatMessage[]
   currentAssistantId: string | null
   runIdInFlight: string | null
+  /** Which intent the user's next message will fire as. */
+  activeIntent: Exclude<AiIntent, 'inline-rewrite' | 'inline-continue' | 'organize'>
   pendingEdits: PendingEdit[]
+  pendingOutline: PendingOutline | null
   pendingPermissions: Array<AiPermissionRequest & { runId: string }>
 
   togglePanel: () => void
   setPanelOpen: (open: boolean) => void
+  setActiveIntent: (intent: AiStore['activeIntent']) => void
   resetSession: () => void
   addUserMessage: (text: string) => string
+  addSystemNote: (text: string) => void
   setRunInFlight: (runId: string | null) => void
   applyEvent: (event: AiEvent) => void
   acceptEdit: (runId: string) => PendingEdit | null
   rejectEdit: (runId: string) => void
+  clearPendingOutline: () => void
 }
 
 function newSessionId() {
@@ -63,11 +77,14 @@ export const useAiStore = create<AiStore>((set, get) => ({
   messages: [],
   currentAssistantId: null,
   runIdInFlight: null,
+  activeIntent: 'chat',
   pendingEdits: [],
+  pendingOutline: null,
   pendingPermissions: [],
 
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
   setPanelOpen: (open) => set({ panelOpen: open }),
+  setActiveIntent: (intent) => set({ activeIntent: intent }),
 
   resetSession: () => {
     const old = get().sessionId
@@ -77,7 +94,9 @@ export const useAiStore = create<AiStore>((set, get) => ({
       messages: [],
       currentAssistantId: null,
       runIdInFlight: null,
+      activeIntent: 'chat',
       pendingEdits: [],
+      pendingOutline: null,
       pendingPermissions: [],
     })
   },
@@ -88,7 +107,14 @@ export const useAiStore = create<AiStore>((set, get) => ({
     return id
   },
 
+  addSystemNote: (text) => {
+    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    set((s) => ({ messages: [...s.messages, { id, role: 'assistant', text }] }))
+  },
+
   setRunInFlight: (runId) => set({ runIdInFlight: runId }),
+
+  clearPendingOutline: () => set({ pendingOutline: null }),
 
   applyEvent: (event) => {
     set((s) => {
@@ -144,6 +170,21 @@ export const useAiStore = create<AiStore>((set, get) => ({
               { runId: event.runId, edit: event.edit, createdAt: Date.now() },
             ],
           }
+        }
+        case 'propose_outline': {
+          return {
+            pendingOutline: {
+              runId: event.runId,
+              title: event.title,
+              sections: event.sections,
+            },
+          }
+        }
+        case 'doc_append':
+        case 'doc_replace_section': {
+          // Handled by App.tsx (it has the doc store + remount key). Nothing
+          // to do in the AI store itself.
+          return {}
         }
         case 'permission_request': {
           return {

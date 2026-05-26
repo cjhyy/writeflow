@@ -10,12 +10,13 @@ import { app } from 'electron'
 import path from 'node:path'
 import type { AppSettings } from '../../shared/types.js'
 import type { AiIntent } from '../../shared/ai-types.js'
-import { BASE_PROMPT, intentPrompt } from './prompts/index.js'
+import { BASE_PROMPT } from './prompts/index.js'
 import { buildTools, type ToolHostHooks } from './tools/index.js'
 
 export interface EngineSetup {
   settings: AppSettings
   apiKey: string
+  /** Intent used only to size maxTurns; the per-turn intent prompt is prepended to each user message instead of the system prompt. */
   intent: AiIntent
   toolHost: ToolHostHooks
 }
@@ -38,7 +39,7 @@ function sessionDir(): string {
 export function buildEngine(setup: EngineSetup): Engine {
   const { settings, apiKey, intent, toolHost } = setup
   const { provider, providerKind } = providerFromSettings(settings)
-  const appendPrompt = `${BASE_PROMPT}\n\n${intentPrompt(intent)}`
+  const appendPrompt = BASE_PROMPT
 
   const engine = new Engine({
     llm: {
@@ -51,7 +52,14 @@ export function buildEngine(setup: EngineSetup): Engine {
     },
     cwd: app.getPath('userData'),
     permissionMode: 'acceptEdits',
-    maxTurns: intent === 'organize' ? 30 : intent.startsWith('inline-') ? 3 : 15,
+    maxTurns:
+      intent === 'organize'
+        ? 30
+        : intent === 'write-doc'
+          ? 40
+          : intent.startsWith('inline-')
+            ? 3
+            : 15,
     sessionStorageDir: sessionDir(),
     // Disable everything the SDK ships by default; we want a clean tool surface.
     enabledBuiltinTools: [],

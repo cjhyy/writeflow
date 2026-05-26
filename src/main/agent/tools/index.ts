@@ -111,6 +111,97 @@ function buildGetCursorContext(host: ToolHostHooks): CustomTool {
   }
 }
 
+function buildProposeOutline(host: ToolHostHooks): CustomTool {
+  return {
+    definition: {
+      name: 'propose_outline',
+      description:
+        'Send a proposed document outline (title + sections) to the UI. The user will edit it and click "开始写", which fires a follow-up turn with outlineApproved=true. You should call this exactly once during write-doc Phase 2, then stop.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Short document title.' },
+          sections: {
+            type: 'array',
+            description: '3-7 sections.',
+            items: {
+              type: 'object',
+              properties: {
+                heading: { type: 'string', description: 'Section heading text (no # prefix).' },
+                hint: { type: 'string', description: 'One-line description of what this section covers.' },
+              },
+              required: ['heading', 'hint'],
+            },
+          },
+        },
+        required: ['title', 'sections'],
+      },
+      source: 'builtin',
+      permissionDefault: 'allow',
+    },
+    execute: async (args) => {
+      const title = String(args.title ?? '')
+      const sectionsRaw = Array.isArray(args.sections) ? args.sections : []
+      const sections = sectionsRaw.map((s) => ({
+        heading: String((s as { heading?: unknown }).heading ?? ''),
+        hint: String((s as { hint?: unknown }).hint ?? ''),
+      }))
+      host.emit({ type: 'propose_outline', runId: host.runId, title, sections })
+      return 'Outline shown to the user. They will accept (firing a new turn with outlineApproved=true) or edit it.'
+    },
+  }
+}
+
+function buildStreamAppend(host: ToolHostHooks): CustomTool {
+  return {
+    definition: {
+      name: 'stream_append',
+      description:
+        'Append a chunk of markdown to the active document. Use during write-doc Phase 3 to stream content into the editor block-by-block. Pre-approved for the duration of a write-doc run after the user accepts the outline. Each call should be one paragraph or block (~150-300 chars).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Markdown to append. Include leading/trailing newlines to control spacing.' },
+        },
+        required: ['text'],
+      },
+      source: 'builtin',
+      permissionDefault: 'allow',
+    },
+    execute: async (args) => {
+      const text = String(args.text ?? '')
+      host.emit({ type: 'doc_append', runId: host.runId, text })
+      return `Appended ${text.length} chars to the doc.`
+    },
+  }
+}
+
+function buildStreamReplaceSection(host: ToolHostHooks): CustomTool {
+  return {
+    definition: {
+      name: 'stream_replace_section',
+      description:
+        'Replace a single section of the document, identified by its heading text. The section spans from the matching heading up to the next heading of the same or higher level, exclusive. Use during write-doc Phase 4 (refine).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          heading: { type: 'string', description: 'The exact heading text (no # markers). Must match an existing heading in the doc.' },
+          newContent: { type: 'string', description: 'The new section body, INCLUDING its own heading line (e.g. "## New title\\n\\nbody…").' },
+        },
+        required: ['heading', 'newContent'],
+      },
+      source: 'builtin',
+      permissionDefault: 'allow',
+    },
+    execute: async (args) => {
+      const heading = String(args.heading ?? '')
+      const newContent = String(args.newContent ?? '')
+      host.emit({ type: 'doc_replace_section', runId: host.runId, heading, newContent })
+      return `Section "${heading}" replaced.`
+    },
+  }
+}
+
 function buildProposeEdit(host: ToolHostHooks): CustomTool {
   return {
     definition: {
@@ -305,6 +396,9 @@ export function buildTools(host: ToolHostHooks): CustomTool[] {
     buildGetSelection(host),
     buildGetCursorContext(host),
     buildProposeEdit(host),
+    buildProposeOutline(host),
+    buildStreamAppend(host),
+    buildStreamReplaceSection(host),
     buildReadFile(host),
     buildListFolder(host),
     buildWriteFile(host),

@@ -215,6 +215,52 @@ export function App() {
     setAiEpoch((e) => e + 1)
   }, [])
 
+  // Streamed append from write-doc workflow.
+  const appendToDoc = useCallback((text: string) => {
+    const cur = useDocStore.getState().content
+    const next = (cur && !cur.endsWith('\n') ? cur + '\n' : cur) + text
+    useDocStore.getState().setContent(next)
+    setAiEpoch((e) => e + 1)
+  }, [])
+
+  // Replace a section by heading. Heading is matched case-sensitively against
+  // any markdown ATX heading line (# / ## / ### / ...). The section spans
+  // from the matched heading up to the next heading of the same OR higher
+  // level, exclusive of that next heading.
+  const replaceSection = useCallback((heading: string, newContent: string) => {
+    const cur = useDocStore.getState().content
+    const lines = cur.split('\n')
+    const headingRegex = /^(#{1,6})\s+(.+?)\s*$/
+    let startIdx = -1
+    let startLevel = 0
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(headingRegex)
+      if (m && m[2].trim() === heading.trim()) {
+        startIdx = i
+        startLevel = m[1].length
+        break
+      }
+    }
+    if (startIdx === -1) {
+      // Section not found — append as new section instead of silently dropping.
+      appendToDoc('\n\n' + newContent)
+      return
+    }
+    let endIdx = lines.length
+    for (let i = startIdx + 1; i < lines.length; i++) {
+      const m = lines[i].match(headingRegex)
+      if (m && m[1].length <= startLevel) {
+        endIdx = i
+        break
+      }
+    }
+    const before = lines.slice(0, startIdx).join('\n')
+    const after = lines.slice(endIdx).join('\n')
+    const next = [before, newContent, after].filter((s) => s.length > 0).join('\n')
+    useDocStore.getState().setContent(next)
+    setAiEpoch((e) => e + 1)
+  }, [appendToDoc])
+
   const onContinueWrite = useCallback(async (contextBefore: string) => {
     const s = useDocStore.getState()
     const { runId } = await window.api.ai.run({
@@ -312,6 +358,8 @@ export function App() {
           <div style={{ width: aiPanelWidth, flexShrink: 0 }}>
             <AIPanel
               onApplyEdit={applyAiEdit}
+              onAppendToDoc={appendToDoc}
+              onReplaceSection={replaceSection}
               workspaceRoot={workspaceRoot}
               getSelection={() => {
                 const text = getEditorSelectionText()

@@ -26,6 +26,7 @@ import path from 'node:path'
 import { app, safeStorage } from 'electron'
 import { clearRunContext, setRunContext } from './doc-context.js'
 import { buildEngine } from './engine-builder.js'
+import { intentPrompt } from './prompts/index.js'
 import type { Engine, StreamEvent } from '@cjhyy/code-shell-core'
 import type { ToolHostHooks } from './tools/index.js'
 
@@ -115,6 +116,10 @@ function mapStreamEvent(runId: string, e: StreamEvent): AiEvent | null {
 // ─── User-message composer ──────────────────────────────────────────
 
 function composeUserMessage(input: AiRunInput): string {
+  return `${intentPrompt(input.intent)}\n\n---\n\n${composeUserBody(input)}`
+}
+
+function composeUserBody(input: AiRunInput): string {
   const { intent, message, docContext, inlineAction, organizeTarget } = input
   const sel = docContext.selectionText
   switch (intent) {
@@ -142,6 +147,12 @@ function composeUserMessage(input: AiRunInput): string {
     case 'organize': {
       const target = organizeTarget?.folderPath ?? '.'
       return `${message}\n\nTarget folder: ${target}`
+    }
+    case 'write-doc': {
+      const flag = input.outlineApproved
+        ? '[outlineApproved=true — the user has accepted the outline. Skip clarify/outline phases and go directly to Phase 3 (Draft). The approved outline appears below.]\n\n'
+        : ''
+      return flag + message
     }
     case 'chat':
     default:
@@ -201,16 +212,19 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
     },
   }
 
-  // Resolve / build the Engine
-  const isChat = input.intent === 'chat' && input.sessionId
+  // Resolve / build the Engine. Chat panel sessions ('chat' and 'write-doc')
+  // share one persistent Engine per panel sessionId so multi-turn workflows
+  // (clarify → outline → draft) keep their transcript. Inline shots build a
+  // fresh Engine each run.
+  const panelSession = (input.intent === 'chat' || input.intent === 'write-doc') && input.sessionId
   let engine: Engine
   let sessionId: string | undefined
-  if (isChat && chatEngines.has(input.sessionId!)) {
+  if (panelSession && chatEngines.has(input.sessionId!)) {
     engine = chatEngines.get(input.sessionId!)!
     sessionId = input.sessionId
   } else {
     engine = buildEngine({ settings: settings as AppSettings, apiKey, intent: input.intent, toolHost })
-    if (isChat) {
+    if (panelSession) {
       chatEngines.set(input.sessionId!, engine)
       sessionId = input.sessionId
     }

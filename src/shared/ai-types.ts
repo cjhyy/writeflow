@@ -10,6 +10,7 @@ export type AiIntent =
   | 'inline-rewrite'
   | 'inline-continue'
   | 'chat'
+  | 'write-doc'
   | 'organize'
 
 export interface SelectionRange {
@@ -57,6 +58,12 @@ export interface AiRunInput {
   inlineAction?: AiInlineAction
   /** Optional target args for 'organize' (a folder path). */
   organizeTarget?: { folderPath: string }
+  /**
+   * For `write-doc`: true when the user has already approved an outline in
+   * this thread, so the agent should skip the outline step and stream into
+   * the doc directly. The agent's prompt also receives this signal.
+   */
+  outlineApproved?: boolean
   /** Live doc snapshot. */
   docContext: DocContext
 }
@@ -86,12 +93,20 @@ export interface AiPermissionRequest {
   riskLevel: 'low' | 'medium' | 'high'
 }
 
+export interface AiOutlineSection {
+  heading: string
+  hint: string
+}
+
 export type AiEvent =
   | { type: 'token'; runId: string; text: string }
   | { type: 'thinking'; runId: string; text: string }
   | { type: 'tool_call'; runId: string; name: string; args: Record<string, unknown>; toolCallId: string }
   | { type: 'tool_result'; runId: string; name: string; ok: boolean; summary: string; toolCallId: string }
   | { type: 'propose_edit'; runId: string; edit: AiProposedEdit }
+  | { type: 'propose_outline'; runId: string; title: string; sections: AiOutlineSection[] }
+  | { type: 'doc_append'; runId: string; text: string }
+  | { type: 'doc_replace_section'; runId: string; heading: string; newContent: string }
   | { type: 'permission_request'; runId: string; request: AiPermissionRequest }
   | { type: 'done'; runId: string; terminalReason: string; text: string }
   | { type: 'error'; runId: string; message: string }
