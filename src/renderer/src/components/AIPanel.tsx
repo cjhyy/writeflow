@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AiEvent, DocContext, AiRunInput, AiOutlineSection } from '@shared/ai-types'
-import { useAiStore } from '../stores/ai-store'
+import type { AiEvent, DocContext, AiRunInput, AiOutlineSection, AiStoredSession } from '@shared/ai-types'
+import { useAiStore, type ChatMessage } from '../stores/ai-store'
 import { useDocStore } from '../stores/document-store'
 import { AIDiffPreview } from './AIDiffPreview'
 
@@ -36,11 +36,37 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
   const applyEvent = useAiStore((s) => s.applyEvent)
   const clearPendingOutline = useAiStore((s) => s.clearPendingOutline)
   const resetSession = useAiStore((s) => s.resetSession)
+  const restoreSession = useAiStore((s) => s.restoreSession)
   const acceptEdit = useAiStore((s) => s.acceptEdit)
   const rejectEdit = useAiStore((s) => s.rejectEdit)
 
   const [draft, setDraft] = useState('')
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [history, setHistory] = useState<AiStoredSession[]>([])
   const scrollerRef = useRef<HTMLDivElement>(null)
+
+  // Restore the most recent saved session on first mount (so closing/reopening
+  // the app keeps the last conversation).
+  useEffect(() => {
+    let cancelled = false
+    window.api.ai.loadHistory().then((list) => {
+      if (cancelled) return
+      setHistory(list)
+      const cur = useAiStore.getState()
+      if (cur.messages.length === 0 && list[0]) {
+        restoreSession(list[0].sessionId, list[0].messages as ChatMessage[])
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [restoreSession])
+
+  async function openHistory() {
+    const list = await window.api.ai.loadHistory()
+    setHistory(list)
+    setHistoryOpen((v) => !v)
+  }
 
   useEffect(() => {
     const unsub = window.api.ai.onEvent((e: AiEvent) => {
@@ -116,17 +142,62 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg)] border-l border-[var(--border)]">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
-        <div className="text-sm font-medium">AI 助手</div>
-        <div className="flex items-center gap-2">
+      <div className="relative flex items-center justify-between px-3 py-2 border-b border-[var(--border)] gap-2">
+        <ModelPicker />
+        <div className="flex items-center gap-2 shrink-0">
           <button
             className="text-xs text-[var(--muted)] hover:text-[var(--fg)]"
-            onClick={resetSession}
+            onClick={openHistory}
+            title="历史对话"
+          >
+            🕘 历史
+          </button>
+          <button
+            className="text-xs text-[var(--muted)] hover:text-[var(--fg)]"
+            onClick={() => {
+              resetSession()
+              setHistoryOpen(false)
+            }}
             title="新对话"
           >
             ↺ 新对话
           </button>
         </div>
+        {historyOpen && (
+          <div className="absolute right-2 top-full z-20 mt-1 w-64 max-h-80 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--bg)] shadow-md">
+            {history.length === 0 && (
+              <div className="p-3 text-xs text-[var(--muted)]">还没有历史对话</div>
+            )}
+            {history.map((h) => (
+              <div
+                key={h.sessionId}
+                className="flex items-center gap-1 px-2 py-1.5 hover:bg-[var(--bg-soft)] cursor-pointer group"
+                onClick={() => {
+                  restoreSession(h.sessionId, h.messages as ChatMessage[])
+                  setHistoryOpen(false)
+                }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs truncate">{h.title || '对话'}</div>
+                  <div className="text-[10px] text-[var(--muted)]">
+                    {new Date(h.updatedAt).toLocaleString()}
+                  </div>
+                </div>
+                <button
+                  className="text-xs text-[var(--muted)] hover:text-red-500 opacity-0 group-hover:opacity-100 px-1"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void window.api.ai.deleteSession(h.sessionId)
+                    setHistory((list) => list.filter((x) => x.sessionId !== h.sessionId))
+                  }}
+                  title="删除"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div ref={scrollerRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
@@ -246,6 +317,91 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
         </div>
       </div>
     </div>
+  )
+}
+
+function ModelPicker() {
+  const [model, setModel] = useState<string>('')
+  const [models, setModels] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [manual, setManual] = useState(false)
+  const [manualValue, setManualValue] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    window.api.settings.get().then((s) => {
+      if (!cancelled) setModel(s.aiModel)
+    })
+    setLoading(true)
+    window.api.ai.listModels(false).then((res) => {
+      if (cancelled) return
+      setModels(res.models.map((m) => m.id))
+      setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function pick(id: string) {
+    if (id === '__manual__') {
+      setManual(true)
+      setManualValue(model)
+      return
+    }
+    setModel(id)
+    await window.api.settings.update({ aiModel: id })
+    await window.api.ai.flush()
+  }
+
+  async function commitManual() {
+    const v = manualValue.trim()
+    if (!v) {
+      setManual(false)
+      return
+    }
+    setModel(v)
+    setModels((m) => (m.includes(v) ? m : [v, ...m]))
+    setManual(false)
+    await window.api.settings.update({ aiModel: v })
+    await window.api.ai.flush()
+  }
+
+  if (manual) {
+    return (
+      <input
+        autoFocus
+        value={manualValue}
+        onChange={(e) => setManualValue(e.target.value)}
+        onBlur={commitManual}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void commitManual()
+          if (e.key === 'Escape') setManual(false)
+        }}
+        placeholder="输入模型 ID，如 anthropic/claude-opus-4.7-fast"
+        className="flex-1 min-w-0 text-xs bg-transparent border-b border-[var(--border)] py-1 focus:outline-none focus:border-[var(--accent)]"
+      />
+    )
+  }
+
+  // Ensure the current model always appears even if it's not in the fetched list.
+  const options = models.includes(model) || !model ? models : [model, ...models]
+
+  return (
+    <select
+      value={model}
+      onChange={(e) => void pick(e.target.value)}
+      title="切换模型"
+      className="flex-1 min-w-0 text-xs bg-transparent border border-[var(--border)] rounded px-1 py-1 focus:outline-none focus:border-[var(--accent)] cursor-pointer"
+    >
+      {!model && <option value="">{loading ? '加载模型…' : '选择模型'}</option>}
+      {options.map((id) => (
+        <option key={id} value={id}>
+          {id}
+        </option>
+      ))}
+      <option value="__manual__">＋ 手动输入…</option>
+    </select>
   )
 }
 

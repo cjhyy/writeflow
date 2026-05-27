@@ -61,6 +61,10 @@ interface AiStore {
   acceptEdit: (runId: string) => PendingEdit | null
   rejectEdit: (runId: string) => void
   clearPendingOutline: () => void
+  /** Persist the current session to disk (called after each turn settles). */
+  persist: () => void
+  /** Restore a previously saved session into the panel. */
+  restoreSession: (sessionId: string, messages: ChatMessage[]) => void
 }
 
 function newSessionId() {
@@ -197,6 +201,8 @@ export const useAiStore = create<AiStore>((set, get) => ({
           }
         }
         case 'done': {
+          // Persist after the turn settles (next tick so this set() lands first).
+          queueMicrotask(() => get().persist())
           return {
             runIdInFlight: s.runIdInFlight === event.runId ? null : s.runIdInFlight,
             currentAssistantId: null,
@@ -217,4 +223,26 @@ export const useAiStore = create<AiStore>((set, get) => ({
 
   rejectEdit: (runId) =>
     set((s) => ({ pendingEdits: s.pendingEdits.filter((p) => p.runId !== runId) })),
+
+  persist: () => {
+    const { sessionId, messages } = get()
+    if (messages.length === 0) return
+    const firstUser = messages.find((m) => m.role === 'user')
+    const title = (firstUser?.text ?? '对话').slice(0, 40)
+    window.api.ai
+      .saveSession({ sessionId, title, updatedAt: new Date().toISOString(), messages })
+      .catch(() => undefined)
+  },
+
+  restoreSession: (sessionId, messages) => {
+    set({
+      sessionId,
+      messages,
+      currentAssistantId: null,
+      runIdInFlight: null,
+      pendingEdits: [],
+      pendingOutline: null,
+      pendingPermissions: [],
+    })
+  },
 }))

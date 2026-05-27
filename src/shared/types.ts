@@ -69,9 +69,11 @@ export type ThemeName = 'light' | 'dark' | 'sepia'
 
 import type {
   AiEvent,
+  AiListModelsResult,
   AiPermissionResponse,
   AiRunHandle,
   AiRunInput,
+  AiStoredSession,
   AiTestConnectionResult,
 } from './ai-types.js'
 
@@ -82,6 +84,10 @@ export interface DesktopApi {
     respondPermission: (resp: AiPermissionResponse) => Promise<void>
     resetSession: (sessionId: string) => Promise<void>
     testConnection: () => Promise<AiTestConnectionResult>
+    listModels: (refresh?: boolean) => Promise<AiListModelsResult>
+    loadHistory: () => Promise<AiStoredSession[]>
+    saveSession: (session: AiStoredSession) => Promise<void>
+    deleteSession: (sessionId: string) => Promise<void>
     flush: () => Promise<void>
     onEvent: (cb: (e: AiEvent) => void) => () => void
   }

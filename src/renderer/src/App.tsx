@@ -28,7 +28,7 @@ export function App() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [aiEpoch, setAiEpoch] = useState(0)
   const [aiPanelWidth, setAiPanelWidth] = useState(360)
-  const [workspaceRoot] = useState<string | null>(null)
+  const [workspaceRoot] = useState<string | null>(() => localStorage.getItem('writeflow.sidebar.folder'))
   const aiPanelOpen = useAiStore((s) => s.panelOpen)
   const toggleAiPanel = useAiStore((s) => s.togglePanel)
 

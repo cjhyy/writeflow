@@ -13,9 +13,11 @@ import type {
 } from '../shared/types.js'
 import type {
   AiEvent,
+  AiListModelsResult,
   AiPermissionResponse,
   AiRunHandle,
   AiRunInput,
+  AiStoredSession,
   AiTestConnectionResult,
 } from '../shared/ai-types.js'
 
@@ -67,6 +69,13 @@ const api: DesktopApi = {
       ipcRenderer.invoke('ai:resetSession', sessionId) as Promise<void>,
     testConnection: () =>
       ipcRenderer.invoke('ai:testConnection') as Promise<AiTestConnectionResult>,
+    listModels: (refresh?: boolean) =>
+      ipcRenderer.invoke('ai:listModels', refresh) as Promise<AiListModelsResult>,
+    loadHistory: () => ipcRenderer.invoke('ai:loadHistory') as Promise<AiStoredSession[]>,
+    saveSession: (session: AiStoredSession) =>
+      ipcRenderer.invoke('ai:saveSession', session) as Promise<void>,
+    deleteSession: (sessionId: string) =>
+      ipcRenderer.invoke('ai:deleteSession', sessionId) as Promise<void>,
     flush: () => ipcRenderer.invoke('ai:flush') as Promise<void>,
     onEvent: (cb: (e: AiEvent) => void) => {
       const handler = (_: unknown, e: AiEvent) => cb(e)

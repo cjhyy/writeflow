@@ -10,6 +10,7 @@ interface SidebarProps {
 
 type Tab = 'files' | 'outline'
 const TAB_KEY = 'writeflow.sidebar.tab'
+const FOLDER_KEY = 'writeflow.sidebar.folder'
 
 interface Heading {
   level: number
@@ -48,12 +49,18 @@ function parseHeadings(md: string): Heading[] {
 export function Sidebar({ activeFilePath, markdown, onSelectFile, onJumpHeading }: SidebarProps) {
   const [tab, setTab] = useState<Tab>(() => (localStorage.getItem(TAB_KEY) as Tab) || 'files')
   const [entries, setEntries] = useState<DirEntry[]>([])
-  const [folder, setFolder] = useState<string | null>(null)
+  const [folder, setFolder] = useState<string | null>(() => localStorage.getItem(FOLDER_KEY))
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(TAB_KEY, tab)
   }, [tab])
+
+  // Persist the opened workspace folder so it's restored on next launch.
+  useEffect(() => {
+    if (folder) localStorage.setItem(FOLDER_KEY, folder)
+    else localStorage.removeItem(FOLDER_KEY)
+  }, [folder])
 
   // Siblings of current file (no folder explicitly opened)
   useEffect(() => {

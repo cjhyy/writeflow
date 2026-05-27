@@ -129,11 +129,33 @@ export interface AiTestConnectionResult {
   latencyMs?: number
 }
 
+export interface AiModelInfo {
+  id: string
+  contextLength?: number
+}
+
+export interface AiStoredSession {
+  sessionId: string
+  title: string
+  updatedAt: string
+  messages: unknown[]
+}
+
+export interface AiListModelsResult {
+  models: AiModelInfo[]
+  error?: string
+  fromCache?: boolean
+}
+
 export interface AiServiceApi {
   run: (input: AiRunInput) => Promise<AiRunHandle>
   cancel: (runId: string) => Promise<void>
   respondPermission: (response: AiPermissionResponse) => Promise<void>
   resetSession: (sessionId: string) => Promise<void>
   testConnection: () => Promise<AiTestConnectionResult>
+  listModels: (refresh?: boolean) => Promise<AiListModelsResult>
+  loadHistory: () => Promise<AiStoredSession[]>
+  saveSession: (session: AiStoredSession) => Promise<void>
+  deleteSession: (sessionId: string) => Promise<void>
   onEvent: (cb: (e: AiEvent) => void) => () => void
 }

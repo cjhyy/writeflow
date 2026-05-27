@@ -26,7 +26,10 @@ import { app, safeStorage } from 'electron'
 import { clearRunContext, setRunContext } from './doc-context.js'
 import { buildEngine } from './engine-builder.js'
 import { intentPrompt } from './prompts/index.js'
-import type { Engine, StreamEvent } from '@cjhyy/code-shell-core'
+import { readHistory, saveSession, deleteSession, type StoredSession } from './history-store.js'
+import { fetchModelList, defaultCacheDir } from '@cjhyy/code-shell-core'
+import type { Engine, StreamEvent, ProviderKindName } from '@cjhyy/code-shell-core'
+import type { AiListModelsResult } from '../../shared/ai-types.js'
 import type { ToolHostHooks } from './tools/index.js'
 
 // ─── Settings/API key helpers (local copies to avoid circular dep) ──
@@ -359,6 +362,36 @@ async function testConnection(): Promise<AiTestConnectionResult> {
   }
 }
 
+function providerKindFromSettings(s: AppSettings): ProviderKindName {
+  if (s.aiProvider === 'openrouter') return 'openrouter'
+  if (s.aiProvider === 'openai') return 'openai'
+  return 'custom'
+}
+
+async function listModels(refresh = false): Promise<AiListModelsResult> {
+  const settings = (await readSettingsRaw()) as AppSettings
+  const apiKey = await readApiKey()
+  const kind = providerKindFromSettings(settings)
+  try {
+    const result = await fetchModelList(
+      {
+        key: settings.aiProvider,
+        kind,
+        baseUrl: settings.aiBaseUrl,
+        apiKey: apiKey || undefined,
+      },
+      { cacheDir: defaultCacheDir(), refresh, timeoutMs: 15000 },
+    )
+    return {
+      models: result.models.map((m) => ({ id: m.id, contextLength: m.contextLength })),
+      error: result.error,
+      fromCache: result.fromCache,
+    }
+  } catch (err) {
+    return { models: [], error: (err as Error).message }
+  }
+}
+
 // ─── Public registration ────────────────────────────────────────────
 
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
@@ -377,6 +410,12 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
   ipcMain.handle('ai:testConnection', async () => {
     return testConnection()
   })
+  ipcMain.handle('ai:listModels', async (_e, refresh?: boolean) => {
+    return listModels(refresh ?? false)
+  })
+  ipcMain.handle('ai:loadHistory', async () => readHistory())
+  ipcMain.handle('ai:saveSession', async (_e, session: StoredSession) => saveSession(session))
+  ipcMain.handle('ai:deleteSession', async (_e, sessionId: string) => deleteSession(sessionId))
 
   // When settings change, dispose cached chat engines so the next run picks up
   // the new provider / model / key. We piggy-back on settings:update via a
