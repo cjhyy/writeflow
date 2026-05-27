@@ -51,6 +51,11 @@ export function buildEngine(setup: EngineSetup): Engine {
       enableStreaming: true,
     },
     cwd: app.getPath('userData'),
+    // Isolate from the host's code-shell CLI config: 'isolated' scope makes
+    // the SDK skip ~/.code-shell/settings.json AND any project .code-shell —
+    // so WriteFlow's agent doesn't inherit the user's CLI providers, hooks,
+    // permission rules, or MCP servers. (rc.1+ feature.)
+    settingsScope: 'isolated',
     // bypassPermissions makes the SDK classifier allow every tool without an
     // interactive backend (which we don't wire — this is a desktop UI, not a
     // CLI). Safety for the only destructive tools (write_file / move_file)
