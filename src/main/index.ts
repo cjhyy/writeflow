@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
-import { fileURLToPath } from 'node:url'
+import { app, BrowserWindow, ipcMain, dialog, shell, protocol, net } from 'electron'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 import { registerFileHandlers } from './file-service.js'
 import { registerSettingsHandlers } from './settings-service.js'
@@ -7,6 +7,15 @@ import { registerAgentHandlers } from './agent/index.js'
 import { buildMenu } from './menu.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Custom scheme so the renderer (served over http:// in dev) can display
+// local image files. Loading file:// from an http:// origin is blocked by
+// Electron's webSecurity; a registered privileged scheme bypasses that.
+// Markdown like ![](file:///abs/path.png) is rewritten to wf-asset://local/...
+// in the renderer before render.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'wf-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true } },
+])
 
 let mainWindow: BrowserWindow | null = null
 // File path queued by macOS "open-file" event before the window is ready.
@@ -61,6 +70,21 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Serve local files for the wf-asset:// scheme. URL shape:
+  //   wf-asset://local/<percent-encoded-absolute-path>
+  protocol.handle('wf-asset', (request) => {
+    try {
+      const url = new URL(request.url)
+      // host is "local"; the encoded absolute path is the pathname (minus the
+      // leading slash) — decode it back to a real filesystem path.
+      const encoded = url.pathname.replace(/^\//, '')
+      const abs = decodeURIComponent(encoded)
+      return net.fetch(pathToFileURL(abs).toString())
+    } catch {
+      return new Response('bad wf-asset url', { status: 400 })
+    }
+  })
+
   registerFileHandlers()
   registerSettingsHandlers()
   registerAgentHandlers(() => mainWindow)

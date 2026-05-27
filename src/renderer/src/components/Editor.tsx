@@ -136,6 +136,29 @@ export function Editor({ value, onChange, onContinueWrite }: EditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Rewrite local-file image sources so they render. The renderer is served
+  // over http:// (dev), and Electron's webSecurity blocks file:// from an
+  // http:// origin. wf-asset:// is a registered privileged scheme that maps
+  // back to the real file in the main process. The markdown source keeps the
+  // original file:// path — only the rendered <img src> is swapped.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    const rewrite = () => {
+      wrapper.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
+        const raw = img.getAttribute('src') ?? ''
+        if (raw.startsWith('file://')) {
+          const abs = decodeURIComponent(raw.replace(/^file:\/\//, ''))
+          img.src = `wf-asset://local/${encodeURIComponent(abs)}`
+        }
+      })
+    }
+    rewrite()
+    const obs = new MutationObserver(rewrite)
+    obs.observe(wrapper, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
+    return () => obs.disconnect()
+  }, [])
+
   // Click in whitespace below content → caret to end of doc
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const pm = wrapperRef.current?.querySelector<HTMLElement>('.ProseMirror')

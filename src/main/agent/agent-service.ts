@@ -27,6 +27,7 @@ import { clearRunContext, setRunContext } from './doc-context.js'
 import { buildEngine } from './engine-builder.js'
 import { intentPrompt } from './prompts/index.js'
 import { readHistory, saveSession, deleteSession, type StoredSession } from './history-store.js'
+import { aiLog } from './ai-logger.js'
 import { fetchModelList, defaultCacheDir } from '@cjhyy/code-shell-core'
 import type { Engine, StreamEvent, ProviderKindName } from '@cjhyy/code-shell-core'
 import type { AiListModelsResult } from '../../shared/ai-types.js'
@@ -183,6 +184,16 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
   const settings = await readSettingsRaw()
   const apiKey = await readApiKey()
 
+  aiLog('run.start', {
+    runId,
+    intent: input.intent,
+    sessionId: input.sessionId,
+    model: (settings as AppSettings).aiModel,
+    baseUrl: (settings as AppSettings).aiBaseUrl,
+    hasKey: !!apiKey,
+    msgLen: input.message.length,
+  })
+
   if (!apiKey || !apiKey.trim()) {
     emit(wc, {
       type: 'error',
@@ -275,6 +286,7 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
   }
 
   const userMessage = composeUserMessage(input)
+  aiLog('run.engine_run', { runId })
 
   // Fire-and-forget; events stream back via the onStream callback.
   ;(async () => {
@@ -283,10 +295,18 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
         signal: abort.signal,
         sessionId,
         onStream: (ev) => {
+          if (ev.type === 'tool_use_start') {
+            aiLog('tool.call', { runId, tool: ev.toolCall.toolName })
+          } else if (ev.type === 'tool_result') {
+            aiLog('tool.result', { runId, tool: ev.result.toolName, isError: ev.result.isError })
+          } else if (ev.type === 'error') {
+            aiLog('stream.error', { runId, error: ev.error })
+          }
           const mapped = mapStreamEvent(runId, ev)
           if (mapped) emit(wc, mapped)
         },
       })
+      aiLog('run.done', { runId, reason: result.reason, textLen: result.text.length })
       emit(wc, {
         type: 'done',
         runId,
@@ -295,6 +315,7 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
       })
     } catch (err) {
       const msg = (err as Error).message ?? 'unknown error'
+      aiLog('run.error', { runId, error: msg, aborted: abort.signal.aborted })
       if (!abort.signal.aborted) {
         emit(wc, { type: 'error', runId, message: msg })
       }
