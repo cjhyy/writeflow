@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AiEvent, DocContext, AiRunInput, AiOutlineSection, AiStoredSession } from '@shared/ai-types'
 import { useAiStore, type ChatMessage } from '../stores/ai-store'
 import { useDocStore } from '../stores/document-store'
+import { useUiStore } from '../stores/ui-store'
 import { AIDiffPreview } from './AIDiffPreview'
 
 interface AIPanelProps {
@@ -74,6 +75,14 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
       // Side effect: doc_append / doc_replace_section mutate the live doc.
       if (e.type === 'doc_append') onAppendToDoc(e.text)
       if (e.type === 'doc_replace_section') onReplaceSection(e.heading, e.newContent)
+      // A successful write/move changes the workspace → refresh the sidebar.
+      if (
+        e.type === 'tool_result' &&
+        e.ok &&
+        (e.name === 'write_file' || e.name === 'move_file')
+      ) {
+        useUiStore.getState().bumpFileTree()
+      }
     })
     return unsub
   }, [applyEvent, onAppendToDoc, onReplaceSection])

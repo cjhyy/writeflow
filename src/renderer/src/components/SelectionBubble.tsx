@@ -42,16 +42,31 @@ export function SelectionBubble({ getRange, workspaceRoot, onApplyEdit }: Select
   const [busy, setBusy] = useState(false)
   const [askOpen, setAskOpen] = useState(false)
   const [askText, setAskText] = useState('')
+  // The selection captured while the bubble is visible. Held so the ask flow
+  // can still act on it after focus moves into the input (which collapses the
+  // editor selection).
+  const heldRangeRef = useRef<{ text: string; from: number; to: number } | null>(null)
   const activeRangeRef = useRef<{ text: string; from: number; to: number } | null>(null)
   const activeRunIdRef = useRef<string | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
 
-  // Track DOM selection; place bubble above it. Hide when selection collapses
-  // or when focus leaves the editor surface.
+  function dismiss() {
+    setPos(null)
+    setAskOpen(false)
+    setAskText('')
+    heldRangeRef.current = null
+  }
+
+  // Track DOM selection; place bubble above it. While the ask box is open we
+  // freeze (the editor selection is gone because focus is in the input), so we
+  // don't recompute position or hide.
   useEffect(() => {
     function update() {
+      if (askOpen) return
       const sel = window.getSelection()
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-        if (!askOpen) setPos(null)
+        setPos(null)
+        heldRangeRef.current = null
         return
       }
       const range = sel.getRangeAt(0)
@@ -60,19 +75,35 @@ export function SelectionBubble({ getRange, workspaceRoot, onApplyEdit }: Select
       const container = range.commonAncestorContainer
       const el = container.nodeType === 1 ? (container as Element) : container.parentElement
       if (!el?.closest('.ProseMirror')) {
-        if (!askOpen) setPos(null)
+        setPos(null)
+        heldRangeRef.current = null
         return
       }
       const rect = range.getBoundingClientRect()
       if (rect.width === 0 && rect.height === 0) {
-        if (!askOpen) setPos(null)
+        setPos(null)
+        heldRangeRef.current = null
         return
       }
+      heldRangeRef.current = getRange()
       setPos({ top: rect.top - 44, left: rect.left + rect.width / 2 })
     }
     document.addEventListener('selectionchange', update)
     return () => document.removeEventListener('selectionchange', update)
-  }, [askOpen])
+  }, [askOpen, getRange])
+
+  // Click anywhere outside the bubble dismisses it (covers the "click blank,
+  // bubble won't go away" case, especially while the ask box is open and the
+  // editor selection is already gone so selectionchange won't fire).
+  useEffect(() => {
+    if (!pos) return
+    function onDown(e: MouseEvent) {
+      if (rootRef.current?.contains(e.target as Node)) return
+      dismiss()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [pos])
 
   // Listen for ai:event and intercept this bubble's run only.
   useEffect(() => {
@@ -89,9 +120,7 @@ export function SelectionBubble({ getRange, workspaceRoot, onApplyEdit }: Select
         activeRunIdRef.current = null
         activeRangeRef.current = null
         setBusy(false)
-        setAskOpen(false)
-        setAskText('')
-        setPos(null)
+        dismiss()
       }
     })
     return off
@@ -109,7 +138,10 @@ export function SelectionBubble({ getRange, workspaceRoot, onApplyEdit }: Select
   }
 
   async function runAction(action: AiInlineAction, message?: string) {
-    const range = getRange()
+    // Prefer the live selection, but fall back to the range we captured when
+    // the bubble appeared — by the time the user types in the ask box, the
+    // editor selection is already gone.
+    const range = getRange() ?? heldRangeRef.current
     if (!range || !range.text) return
     activeRangeRef.current = range
     setBusy(true)
@@ -126,6 +158,7 @@ export function SelectionBubble({ getRange, workspaceRoot, onApplyEdit }: Select
 
   return (
     <div
+      ref={rootRef}
       className="fixed z-50 -translate-x-1/2 flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg)] shadow-md px-1 py-1"
       style={{ top: pos.top, left: pos.left }}
       onMouseDown={(e) => e.preventDefault()}

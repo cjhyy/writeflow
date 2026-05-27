@@ -83,6 +83,7 @@ export function App() {
     })
     if (res.ok && res.filePath && res.fileName) {
       useDocStore.getState().markSaved(res.filePath, res.fileName, s.content)
+      useUiStore.getState().bumpFileTree()
       return true
     }
     return false

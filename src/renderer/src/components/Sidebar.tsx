@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DirEntry } from '@shared/types'
+import { useUiStore } from '../stores/ui-store'
 
 interface SidebarProps {
   activeFilePath: string | null
@@ -51,6 +52,7 @@ export function Sidebar({ activeFilePath, markdown, onSelectFile, onJumpHeading 
   const [entries, setEntries] = useState<DirEntry[]>([])
   const [folder, setFolder] = useState<string | null>(() => localStorage.getItem(FOLDER_KEY))
   const [loading, setLoading] = useState(false)
+  const fileTreeVersion = useUiStore((s) => s.fileTreeVersion)
 
   useEffect(() => {
     localStorage.setItem(TAB_KEY, tab)
@@ -76,7 +78,7 @@ export function Sidebar({ activeFilePath, markdown, onSelectFile, onJumpHeading 
     return () => {
       cancelled = true
     }
-  }, [activeFilePath, folder])
+  }, [activeFilePath, folder, fileTreeVersion])
 
   useEffect(() => {
     if (!folder) return
@@ -85,7 +87,7 @@ export function Sidebar({ activeFilePath, markdown, onSelectFile, onJumpHeading 
       setEntries(list)
       setLoading(false)
     })
-  }, [folder])
+  }, [folder, fileTreeVersion])
 
   async function openFolder() {
     try {

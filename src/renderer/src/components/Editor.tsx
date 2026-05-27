@@ -97,7 +97,11 @@ export function Editor({ value, onChange, onContinueWrite }: EditorProps) {
       root: hostRef.current,
       defaultValue: value,
       features: {
-        [Crepe.Feature.Toolbar]: true,
+        // Disabled: our custom AI SelectionBubble occupies the on-selection
+        // floating-bar slot. Keeping Crepe's toolbar too stacked two bars on
+        // every selection (the "weird background that won't dismiss"). Bold/
+        // italic/etc. remain available via the 格式 menu + ⌘B/⌘I shortcuts.
+        [Crepe.Feature.Toolbar]: false,
         [Crepe.Feature.BlockEdit]: false,
         [Crepe.Feature.Latex]: false,
         [Crepe.Feature.Cursor]: true,
