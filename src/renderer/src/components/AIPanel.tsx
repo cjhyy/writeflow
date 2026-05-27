@@ -44,7 +44,25 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
   const [draft, setDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState<AiStoredSession[]>([])
+  // Files the user attached (drag from sidebar, or @mention). Sent to the AI
+  // as paths it can read_file; rendered as removable chips above the input.
+  const [attachments, setAttachments] = useState<Array<{ filePath: string; fileName: string }>>([])
+  const [dragOver, setDragOver] = useState(false)
+  // @mention picker
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionFiles, setMentionFiles] = useState<Array<{ filePath: string; fileName: string }>>([])
+  const [mentionQuery, setMentionQuery] = useState('')
   const scrollerRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  function addAttachment(file: { filePath: string; fileName: string }) {
+    setAttachments((prev) =>
+      prev.some((a) => a.filePath === file.filePath) ? prev : [...prev, file],
+    )
+  }
+  function removeAttachment(filePath: string) {
+    setAttachments((prev) => prev.filter((a) => a.filePath !== filePath))
+  }
 
   // Restore the most recent saved session on first mount (so closing/reopening
   // the app keeps the last conversation).
@@ -106,12 +124,26 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
 
   async function send(message: string, overrides?: Partial<AiRunInput>) {
     if (!message.trim() || runIdInFlight) return
-    addUserMessage(message)
+    const atts = attachments
+    // What the user sees in the transcript: their text + @file chips.
+    const displayMsg =
+      atts.length > 0
+        ? `${message}\n\n${atts.map((a) => `@${a.fileName}`).join(' ')}`
+        : message
+    // What the agent receives: explicit paths + an instruction to read them.
+    const agentMsg =
+      atts.length > 0
+        ? `${message}\n\n[引用的文件，请用 read_file 读取后再回答]\n${atts
+            .map((a) => `- ${a.filePath}`)
+            .join('\n')}`
+        : message
+    addUserMessage(displayMsg)
     setDraft('')
+    setAttachments([])
     const input: AiRunInput = {
       intent: 'auto',
       sessionId,
-      message,
+      message: agentMsg,
       docContext: buildDocContext(),
       ...overrides,
     }
@@ -122,6 +154,57 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
   function cancel() {
     if (runIdInFlight) void window.api.ai.cancel(runIdInFlight)
   }
+
+  // Load candidate files for the @mention picker (workspace folder if open,
+  // else siblings of the active doc).
+  async function loadMentionFiles(): Promise<Array<{ filePath: string; fileName: string }>> {
+    const doc = useDocStore.getState()
+    if (workspaceRoot) return window.api.file.listFolder(workspaceRoot)
+    if (doc.filePath) return window.api.file.listDir(doc.filePath)
+    return []
+  }
+
+  // Detect a trailing "@query" the user is typing and toggle the picker.
+  function onDraftChange(value: string) {
+    setDraft(value)
+    const m = value.match(/(^|\s)@([^\s@]*)$/)
+    if (m) {
+      const q = m[2]
+      setMentionQuery(q)
+      if (!mentionOpen) {
+        setMentionOpen(true)
+        void loadMentionFiles().then(setMentionFiles)
+      }
+    } else if (mentionOpen) {
+      setMentionOpen(false)
+    }
+  }
+
+  // Replace the trailing "@query" with nothing and attach the chosen file.
+  function pickMention(file: { filePath: string; fileName: string }) {
+    addAttachment(file)
+    setDraft((d) => d.replace(/(^|\s)@([^\s@]*)$/, '$1'))
+    setMentionOpen(false)
+    textareaRef.current?.focus()
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const raw = e.dataTransfer.getData('application/x-writeflow-file')
+    if (raw) {
+      try {
+        const f = JSON.parse(raw) as { filePath: string; fileName: string }
+        addAttachment(f)
+      } catch {
+        /* ignore malformed */
+      }
+    }
+  }
+
+  const filteredMentions = mentionFiles
+    .filter((f) => f.fileName.toLowerCase().includes(mentionQuery.toLowerCase()))
+    .slice(0, 8)
 
   function onAcceptEdit(runId: string) {
     const found = acceptEdit(runId)
@@ -292,17 +375,71 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
           </div>
         ))}
       </div>
-      <div className="p-2 border-t border-[var(--border)]">
+      <div
+        className={`relative p-2 border-t border-[var(--border)] ${
+          dragOver ? 'bg-[var(--accent)]/10' : ''
+        }`}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('application/x-writeflow-file')) {
+            e.preventDefault()
+            setDragOver(true)
+          }
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+      >
+        {/* @mention picker */}
+        {mentionOpen && filteredMentions.length > 0 && (
+          <div className="absolute bottom-full left-2 right-2 mb-1 max-h-48 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--bg)] shadow-md z-20">
+            {filteredMentions.map((f) => (
+              <button
+                key={f.filePath}
+                className="block w-full text-left text-xs px-2 py-1.5 hover:bg-[var(--bg-soft)] truncate"
+                onClick={() => pickMention(f)}
+                title={f.filePath}
+              >
+                📄 {f.fileName}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Attachment chips */}
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1">
+            {attachments.map((a) => (
+              <span
+                key={a.filePath}
+                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-[var(--bg-soft)] border border-[var(--border)]"
+                title={a.filePath}
+              >
+                📄 {a.fileName}
+                <button
+                  className="text-[var(--muted)] hover:text-red-500"
+                  onClick={() => removeAttachment(a.filePath)}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <textarea
+          ref={textareaRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => onDraftChange(e.target.value)}
           onKeyDown={(e) => {
+            if (mentionOpen && (e.key === 'Escape')) {
+              setMentionOpen(false)
+              return
+            }
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault()
               void send(draft)
             }
           }}
-          placeholder="说点什么…改写 / 总结 / 提问 / 写一篇 (⌘↩ 发送)"
+          placeholder="说点什么…拖文件进来或打 @ 引用 (⌘↩ 发送)"
           rows={3}
           className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--bg)] p-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />

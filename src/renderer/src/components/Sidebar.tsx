@@ -136,7 +136,16 @@ export function Sidebar({ activeFilePath, markdown, onSelectFile, onJumpHeading 
                       <button
                         className={`sidebar-item ${active ? 'active' : ''}`}
                         onClick={() => onSelectFile(e.filePath)}
-                        title={e.filePath}
+                        title={`${e.filePath}\n（可拖到 AI 输入框引用）`}
+                        draggable
+                        onDragStart={(ev) => {
+                          ev.dataTransfer.setData(
+                            'application/x-writeflow-file',
+                            JSON.stringify({ filePath: e.filePath, fileName: e.fileName }),
+                          )
+                          ev.dataTransfer.setData('text/plain', e.filePath)
+                          ev.dataTransfer.effectAllowed = 'copy'
+                        }}
                       >
                         {e.fileName}
                       </button>
