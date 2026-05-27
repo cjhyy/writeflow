@@ -15,7 +15,6 @@ import { ipcMain, type BrowserWindow, type WebContents } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type {
   AiEvent,
-  AiPermissionRequest,
   AiPermissionResponse,
   AiRunInput,
   AiTestConnectionResult,
@@ -74,7 +73,14 @@ interface ActiveRun {
 }
 
 const activeRuns = new Map<string, ActiveRun>()
-const chatEngines = new Map<string, Engine>()
+/**
+ * Per-session cached Engine + its toolHost. The Engine is reused across turns
+ * so the transcript persists; its custom tools captured `toolHost` by
+ * reference at registration time, so we MUTATE the same toolHost object each
+ * run (runId / emit / requestPermission) rather than building a new one —
+ * otherwise the tools would read a stale runId and getRunContext() would miss.
+ */
+const chatSessions = new Map<string, { engine: Engine; toolHost: ToolHostHooks }>()
 /** "<sessionId>:<tool>" entries the user chose to allow for the whole session. */
 const sessionAllowed = new Set<string>()
 
@@ -196,56 +202,71 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
   }
   activeRuns.set(runId, active)
 
-  const toolHost: ToolHostHooks = {
-    runId,
-    emit: (ev) => emit(wc, ev),
-    requestPermission: (req) => {
-      return new Promise<AiPermissionResponse>((resolve, reject) => {
-        if (abort.signal.aborted) {
-          reject(new Error('aborted'))
-          return
-        }
-        // Session-scoped memory: if the user already chose "本次对话都允许"
-        // for this tool, auto-approve without re-prompting.
-        if (permSessionId && sessionAllowed.has(`${permSessionId}:${req.tool}`)) {
-          resolve({ reqId: 'auto', approved: true, scope: 'session' })
-          return
-        }
-        const reqId = randomUUID()
-        pendingPerms.set(reqId, { tool: req.tool, resolve })
-        const permReq: AiPermissionRequest = {
-          reqId,
-          tool: req.tool,
-          args: req.args,
-          description: req.description,
-          riskLevel: req.riskLevel,
-        }
-        emit(wc, { type: 'permission_request', runId, request: permReq })
-        const onAbort = () => {
-          pendingPerms.delete(reqId)
-          reject(new Error('aborted'))
-        }
-        abort.signal.addEventListener('abort', onAbort, { once: true })
-      })
-    },
+  // The toolHost reads everything live from `active`, so a reused (cached)
+  // host can be re-pointed at the current run by mutating host.runId.
+  function makeToolHost(): ToolHostHooks {
+    const host: ToolHostHooks = {
+      runId,
+      emit: (ev) => emit(active.webContents, ev),
+      requestPermission: (req) => {
+        return new Promise<AiPermissionResponse>((resolve, reject) => {
+          if (active.abort.signal.aborted) {
+            reject(new Error('aborted'))
+            return
+          }
+          if (active.sessionId && sessionAllowed.has(`${active.sessionId}:${req.tool}`)) {
+            resolve({ reqId: 'auto', approved: true, scope: 'session' })
+            return
+          }
+          const reqId = randomUUID()
+          active.pendingPerms.set(reqId, { tool: req.tool, resolve })
+          emit(active.webContents, {
+            type: 'permission_request',
+            runId: host.runId,
+            request: {
+              reqId,
+              tool: req.tool,
+              args: req.args,
+              description: req.description,
+              riskLevel: req.riskLevel,
+            },
+          })
+          const onAbort = () => {
+            active.pendingPerms.delete(reqId)
+            reject(new Error('aborted'))
+          }
+          active.abort.signal.addEventListener('abort', onAbort, { once: true })
+        })
+      },
+    }
+    return host
   }
 
-  // Resolve / build the Engine. Chat panel sessions ('chat' and 'write-doc')
-  // share one persistent Engine per panel sessionId so multi-turn workflows
-  // (clarify → outline → draft) keep their transcript. Inline shots build a
-  // fresh Engine each run.
+  // Resolve / build the Engine. Chat panel sessions share one persistent
+  // Engine per sessionId so multi-turn workflows keep their transcript. The
+  // cached toolHost is re-pointed at the current run (mutate runId + closures'
+  // live `active` lookup). Inline shots build a fresh Engine each run.
   const panelSession =
     (input.intent === 'auto' || input.intent === 'chat' || input.intent === 'write-doc') &&
     input.sessionId
   let engine: Engine
   let sessionId: string | undefined
-  if (panelSession && chatEngines.has(input.sessionId!)) {
-    engine = chatEngines.get(input.sessionId!)!
+  if (panelSession && chatSessions.has(input.sessionId!)) {
+    const cached = chatSessions.get(input.sessionId!)!
+    engine = cached.engine
+    // The Engine's registered tools captured `cached.toolHost` by reference.
+    // Re-point that SAME object at this run by copying in a fresh host's
+    // fields, so getRunContext(host.runId) resolves the current snapshot.
+    const fresh = makeToolHost()
+    cached.toolHost.runId = fresh.runId
+    cached.toolHost.emit = fresh.emit
+    cached.toolHost.requestPermission = fresh.requestPermission
     sessionId = input.sessionId
   } else {
+    const toolHost = makeToolHost()
     engine = buildEngine({ settings: settings as AppSettings, apiKey, intent: input.intent, toolHost })
     if (panelSession) {
-      chatEngines.set(input.sessionId!, engine)
+      chatSessions.set(input.sessionId!, { engine, toolHost })
       sessionId = input.sessionId
     }
   }
@@ -312,7 +333,7 @@ function respondPermission(resp: AiPermissionResponse): void {
 }
 
 async function resetChatSession(sessionId: string): Promise<void> {
-  chatEngines.delete(sessionId)
+  chatSessions.delete(sessionId)
   for (const key of sessionAllowed) {
     if (key.startsWith(`${sessionId}:`)) sessionAllowed.delete(key)
   }
@@ -362,7 +383,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
   // separate IPC listener — the settings-service handler doesn't know about
   // us. Renderer convention: fire `ai:flush` after a successful settings save.
   ipcMain.handle('ai:flush', async () => {
-    chatEngines.clear()
+    chatSessions.clear()
   })
 
   // Keep the unused getMainWindow signature so callers can wire it later.
