@@ -120,6 +120,17 @@ function mapStreamEvent(runId: string, e: StreamEvent): AiEvent | null {
         toolCallId: r.id,
       }
     }
+    case 'task_update':
+      return {
+        type: 'tasks',
+        runId,
+        tasks: e.tasks.map((t) => ({
+          id: t.id,
+          subject: t.subject,
+          activeForm: t.activeForm,
+          status: t.status,
+        })),
+      }
     case 'error':
       return { type: 'error', runId, message: e.error }
     default:

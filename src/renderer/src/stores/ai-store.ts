@@ -17,6 +17,7 @@ import type {
   AiOutlineSection,
   AiPermissionRequest,
   AiProposedEdit,
+  AiTaskInfo,
 } from '@shared/ai-types'
 
 export type ChatMessageRole = 'user' | 'assistant' | 'tool'
@@ -47,6 +48,8 @@ interface AiStore {
   messages: ChatMessage[]
   currentAssistantId: string | null
   runIdInFlight: string | null
+  /** Latest TodoWrite task list from the agent (drives the status dot). */
+  tasks: AiTaskInfo[]
   pendingEdits: PendingEdit[]
   pendingOutline: PendingOutline | null
   pendingPermissions: Array<AiPermissionRequest & { runId: string }>
@@ -77,6 +80,7 @@ export const useAiStore = create<AiStore>((set, get) => ({
   messages: [],
   currentAssistantId: null,
   runIdInFlight: null,
+  tasks: [],
   pendingEdits: [],
   pendingOutline: null,
   pendingPermissions: [],
@@ -92,6 +96,7 @@ export const useAiStore = create<AiStore>((set, get) => ({
       messages: [],
       currentAssistantId: null,
       runIdInFlight: null,
+      tasks: [],
       pendingEdits: [],
       pendingOutline: null,
       pendingPermissions: [],
@@ -183,6 +188,9 @@ export const useAiStore = create<AiStore>((set, get) => ({
           // to do in the AI store itself.
           return {}
         }
+        case 'tasks': {
+          return { tasks: event.tasks }
+        }
         case 'permission_request': {
           return {
             pendingPermissions: [
@@ -240,6 +248,7 @@ export const useAiStore = create<AiStore>((set, get) => ({
       messages,
       currentAssistantId: null,
       runIdInFlight: null,
+      tasks: [],
       pendingEdits: [],
       pendingOutline: null,
       pendingPermissions: [],

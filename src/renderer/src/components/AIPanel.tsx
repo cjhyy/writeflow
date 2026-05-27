@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AiEvent, DocContext, AiRunInput, AiOutlineSection, AiStoredSession } from '@shared/ai-types'
+import type { AiEvent, DocContext, AiRunInput, AiOutlineSection, AiStoredSession, AiTaskInfo } from '@shared/ai-types'
 import { useAiStore, type ChatMessage } from '../stores/ai-store'
 import { useDocStore } from '../stores/document-store'
 import { useUiStore } from '../stores/ui-store'
@@ -29,6 +29,7 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
   const messages = useAiStore((s) => s.messages)
   const sessionId = useAiStore((s) => s.sessionId)
   const runIdInFlight = useAiStore((s) => s.runIdInFlight)
+  const tasks = useAiStore((s) => s.tasks)
   const pendingEdits = useAiStore((s) => s.pendingEdits)
   const pendingOutline = useAiStore((s) => s.pendingOutline)
   const pendingPermissions = useAiStore((s) => s.pendingPermissions)
@@ -237,6 +238,7 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
       <div className="relative flex items-center justify-between px-3 py-2 border-b border-[var(--border)] gap-2">
         <ModelPicker />
         <div className="flex items-center gap-2 shrink-0">
+          <StatusDot busy={!!runIdInFlight} tasks={tasks} />
           <button
             className="text-xs text-[var(--muted)] hover:text-[var(--fg)]"
             onClick={openHistory}
@@ -462,6 +464,56 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function StatusDot({ busy, tasks }: { busy: boolean; tasks: AiTaskInfo[] }) {
+  const [hover, setHover] = useState(false)
+
+  // Tooltip text: the in-progress task's activeForm, else a count summary,
+  // else idle.
+  const active = tasks.find((t) => t.status === 'in_progress')
+  const done = tasks.filter((t) => t.status === 'completed').length
+  const tip = busy
+    ? active?.activeForm ?? active?.subject ?? '正在处理…'
+    : tasks.length > 0
+      ? `已完成 ${done}/${tasks.length} 项`
+      : '空闲'
+
+  return (
+    <div
+      className="relative flex items-center"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <span
+        className={`inline-block w-2.5 h-2.5 rounded-full ${
+          busy ? 'bg-green-500 animate-pulse' : tasks.length > 0 ? 'bg-[var(--muted)]' : 'bg-[var(--border)]'
+        }`}
+        title={tip}
+      />
+      {hover && (tasks.length > 0 || busy) && (
+        <div className="absolute right-0 top-full mt-1 z-30 w-56 max-h-72 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--bg)] shadow-md p-2 text-xs">
+          {busy && <div className="text-green-600 mb-1">● {tip}</div>}
+          {tasks.length === 0 ? (
+            <div className="text-[var(--muted)]">{tip}</div>
+          ) : (
+            <ul className="space-y-0.5">
+              {tasks.map((t) => (
+                <li key={t.id} className="flex items-start gap-1">
+                  <span className="shrink-0">
+                    {t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '⏳' : '○'}
+                  </span>
+                  <span className={t.status === 'completed' ? 'line-through opacity-60' : ''}>
+                    {t.subject}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }

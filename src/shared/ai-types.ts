@@ -99,6 +99,13 @@ export interface AiOutlineSection {
   hint: string
 }
 
+export interface AiTaskInfo {
+  id: string
+  subject: string
+  activeForm?: string
+  status: 'pending' | 'in_progress' | 'completed' | 'stopped'
+}
+
 export type AiEvent =
   | { type: 'token'; runId: string; text: string }
   | { type: 'thinking'; runId: string; text: string }
@@ -108,6 +115,7 @@ export type AiEvent =
   | { type: 'propose_outline'; runId: string; title: string; sections: AiOutlineSection[] }
   | { type: 'doc_append'; runId: string; text: string }
   | { type: 'doc_replace_section'; runId: string; heading: string; newContent: string }
+  | { type: 'tasks'; runId: string; tasks: AiTaskInfo[] }
   | { type: 'permission_request'; runId: string; request: AiPermissionRequest }
   | { type: 'done'; runId: string; terminalReason: string; text: string }
   | { type: 'error'; runId: string; message: string }

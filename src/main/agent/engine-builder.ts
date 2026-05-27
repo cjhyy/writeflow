@@ -67,8 +67,23 @@ export function buildEngine(setup: EngineSetup): Engine {
             ? 3
             : 15,
     sessionStorageDir: sessionDir(),
-    // Disable everything the SDK ships by default; we want a clean tool surface.
-    enabledBuiltinTools: [],
+    // The default preset injects a large CLI-developer tool set (Skill, Bash,
+    // Write, Edit, Agent, Cron, REPL, MCP, …). `enabledBuiltinTools` only ADDS
+    // to the preset, so to get a clean surface we must DISABLE the rest
+    // explicitly. We keep TodoWrite (drives the agent's progress checklist →
+    // status dot) and WebSearch/WebFetch (let it look up facts while writing);
+    // everything else is off so the agent uses our writing tools, not codeshell
+    // CLI tools. The 8 custom tools (get_doc, stream_append, …) are registered
+    // separately and aren't part of the builtin set.
+    enabledBuiltinTools: ['TodoWrite', 'WebSearch', 'WebFetch'],
+    disabledBuiltinTools: [
+      'Read', 'Write', 'Edit', 'ApplyPatch', 'Glob', 'Grep', 'Bash',
+      'AskUserQuestion', 'Agent', 'AgentCancel', 'EnterPlanMode', 'ExitPlanMode',
+      'ToolSearch', 'Sleep', 'Config', 'CronCreate', 'CronDelete', 'CronList',
+      'Skill', 'MCPTool', 'ListMcpResources', 'ReadMcpResource', 'RemoteTrigger',
+      'REPL', 'PowerShell', 'EnterWorktree', 'ExitWorktree', 'NotebookEdit',
+      'LSP', 'Brief', 'Arena',
+    ],
     appendSystemPrompt: appendPrompt,
     headless: true,
     isSubAgent: false,
