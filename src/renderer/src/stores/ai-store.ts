@@ -14,7 +14,6 @@
 import { create } from 'zustand'
 import type {
   AiEvent,
-  AiIntent,
   AiOutlineSection,
   AiPermissionRequest,
   AiProposedEdit,
@@ -48,15 +47,12 @@ interface AiStore {
   messages: ChatMessage[]
   currentAssistantId: string | null
   runIdInFlight: string | null
-  /** Which intent the user's next message will fire as. */
-  activeIntent: Exclude<AiIntent, 'inline-rewrite' | 'inline-continue' | 'organize'>
   pendingEdits: PendingEdit[]
   pendingOutline: PendingOutline | null
   pendingPermissions: Array<AiPermissionRequest & { runId: string }>
 
   togglePanel: () => void
   setPanelOpen: (open: boolean) => void
-  setActiveIntent: (intent: AiStore['activeIntent']) => void
   resetSession: () => void
   addUserMessage: (text: string) => string
   addSystemNote: (text: string) => void
@@ -77,14 +73,12 @@ export const useAiStore = create<AiStore>((set, get) => ({
   messages: [],
   currentAssistantId: null,
   runIdInFlight: null,
-  activeIntent: 'chat',
   pendingEdits: [],
   pendingOutline: null,
   pendingPermissions: [],
 
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
   setPanelOpen: (open) => set({ panelOpen: open }),
-  setActiveIntent: (intent) => set({ activeIntent: intent }),
 
   resetSession: () => {
     const old = get().sessionId
@@ -94,7 +88,6 @@ export const useAiStore = create<AiStore>((set, get) => ({
       messages: [],
       currentAssistantId: null,
       runIdInFlight: null,
-      activeIntent: 'chat',
       pendingEdits: [],
       pendingOutline: null,
       pendingPermissions: [],

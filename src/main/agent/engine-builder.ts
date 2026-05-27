@@ -51,11 +51,17 @@ export function buildEngine(setup: EngineSetup): Engine {
       enableStreaming: true,
     },
     cwd: app.getPath('userData'),
-    permissionMode: 'acceptEdits',
+    // bypassPermissions makes the SDK classifier allow every tool without an
+    // interactive backend (which we don't wire — this is a desktop UI, not a
+    // CLI). Safety for the only destructive tools (write_file / move_file)
+    // lives INSIDE those tools: they call host.requestPermission, which
+    // surfaces an in-panel approval card. So "bypass" here means "don't
+    // double-gate at the classifier"; it does not mean "no approval ever".
+    permissionMode: 'bypassPermissions',
     maxTurns:
       intent === 'organize'
         ? 30
-        : intent === 'write-doc'
+        : intent === 'write-doc' || intent === 'auto'
           ? 40
           : intent.startsWith('inline-')
             ? 3

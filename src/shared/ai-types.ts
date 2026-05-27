@@ -9,6 +9,7 @@
 export type AiIntent =
   | 'inline-rewrite'
   | 'inline-continue'
+  | 'auto'
   | 'chat'
   | 'write-doc'
   | 'organize'

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AiEvent, DocContext, AiRunInput, AiIntent, AiOutlineSection } from '@shared/ai-types'
+import type { AiEvent, DocContext, AiRunInput, AiOutlineSection } from '@shared/ai-types'
 import { useAiStore } from '../stores/ai-store'
 import { useDocStore } from '../stores/document-store'
 import { AIDiffPreview } from './AIDiffPreview'
@@ -17,24 +17,17 @@ interface AIPanelProps {
   getSelection: () => { text: string; from: number; to: number }
 }
 
-const CHAT_PRESETS = [
-  { label: '总结当前文档', prompt: '先用 get_doc 拿到当前文档内容，然后用 5 个要点总结。' },
-  { label: '检查语法和措辞', prompt: '检查当前文档的语法和措辞问题，给出 5 条最重要的建议。' },
-  { label: '找出薄弱论点', prompt: '通读当前文档，列出 3 个最薄弱的论点和改进建议。' },
-]
-
-const WRITE_PRESETS = [
+const PRESETS = [
   '帮我写一篇关于「React 19 新特性」的入门博客，给前端工程师看，约 2000 字',
-  '起草一份产品需求 PRD，主题：',
-  '写一个本周工作总结，重点：',
+  '总结当前文档的要点',
+  '检查当前文档的语法和措辞',
+  '帮我起草一份产品 PRD，主题：',
 ]
 
 export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspaceRoot, getSelection }: AIPanelProps) {
   const messages = useAiStore((s) => s.messages)
   const sessionId = useAiStore((s) => s.sessionId)
   const runIdInFlight = useAiStore((s) => s.runIdInFlight)
-  const activeIntent = useAiStore((s) => s.activeIntent)
-  const setActiveIntent = useAiStore((s) => s.setActiveIntent)
   const pendingEdits = useAiStore((s) => s.pendingEdits)
   const pendingOutline = useAiStore((s) => s.pendingOutline)
   const pendingPermissions = useAiStore((s) => s.pendingPermissions)
@@ -81,7 +74,7 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
     addUserMessage(message)
     setDraft('')
     const input: AiRunInput = {
-      intent: activeIntent as AiIntent,
+      intent: 'auto',
       sessionId,
       message,
       docContext: buildDocContext(),
@@ -103,8 +96,8 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
     onApplyEdit(next)
   }
 
-  async function respondPerm(reqId: string, approved: boolean) {
-    await window.api.ai.respondPermission({ reqId, approved })
+  async function respondPerm(reqId: string, approved: boolean, scope?: 'once' | 'session') {
+    await window.api.ai.respondPermission({ reqId, approved, scope })
     useAiStore.setState((s) => ({
       pendingPermissions: s.pendingPermissions.filter((p) => p.reqId !== reqId),
     }))
@@ -118,7 +111,7 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
       ...outline.sections.flatMap((s) => [`## ${s.heading}`, s.hint, '']),
     ]
     const message = `已采纳大纲，现在开始草稿。\n\n采纳的大纲：\n\n${lines.join('\n')}`
-    await send(message, { intent: 'write-doc', outlineApproved: true })
+    await send(message, { outlineApproved: true })
   }
 
   return (
@@ -136,51 +129,21 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
         </div>
       </div>
 
-      {/* Intent switcher */}
-      <div className="flex gap-1 px-3 py-2 border-b border-[var(--border)]">
-        <IntentBtn current={activeIntent} value="chat" onClick={setActiveIntent}>
-          💬 聊一聊
-        </IntentBtn>
-        <IntentBtn current={activeIntent} value="write-doc" onClick={setActiveIntent}>
-          ✍️ 写一篇
-        </IntentBtn>
-      </div>
-
       <div ref={scrollerRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && !pendingOutline && pendingPermissions.length === 0 && pendingEdits.length === 0 && (
           <div className="text-sm text-[var(--muted)] space-y-2">
-            {activeIntent === 'chat' ? (
-              <>
-                <p>问点什么，或选个快捷预设：</p>
-                <div className="flex flex-wrap gap-2">
-                  {CHAT_PRESETS.map((p) => (
-                    <button
-                      key={p.label}
-                      className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-soft)]"
-                      onClick={() => void send(p.prompt)}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <p>告诉我要写什么，AI 会先列大纲，你点"开始写"后才往文档里填内容。</p>
-                <p className="opacity-70">示例：</p>
-                <div className="flex flex-col gap-1">
-                  {WRITE_PRESETS.map((p) => (
-                    <button
-                      key={p}
-                      className="text-xs text-left px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-soft)]"
-                      onClick={() => setDraft(p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <p>直接说你想干什么 —— 改写、总结、提问、或写一整篇文档都行。写整篇时我会先列大纲让你确认。</p>
+            <div className="flex flex-col gap-1">
+              {PRESETS.map((p) => (
+                <button
+                  key={p}
+                  className="text-xs text-left px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-soft)]"
+                  onClick={() => setDraft(p)}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -226,12 +189,18 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
           >
             <div className="font-medium">需要授权</div>
             <div className="text-xs text-[var(--muted)] my-1">{p.description}</div>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button
+                className="text-xs px-2 py-1 rounded bg-[var(--accent)] text-white"
+                onClick={() => void respondPerm(p.reqId, true, 'once')}
+              >
+                允许一次
+              </button>
               <button
                 className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-soft)]"
-                onClick={() => void respondPerm(p.reqId, true)}
+                onClick={() => void respondPerm(p.reqId, true, 'session')}
               >
-                允许
+                本次对话都允许
               </button>
               <button
                 className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-soft)]"
@@ -253,11 +222,7 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
               void send(draft)
             }
           }}
-          placeholder={
-            activeIntent === 'write-doc'
-              ? '要写什么？（主题、读者、长度…AI 会先问需要补的信息）'
-              : '问点什么… (⌘↩ 发送)'
-          }
+          placeholder="说点什么…改写 / 总结 / 提问 / 写一篇 (⌘↩ 发送)"
           rows={3}
           className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--bg)] p-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />
@@ -275,37 +240,12 @@ export function AIPanel({ onApplyEdit, onAppendToDoc, onReplaceSection, workspac
               disabled={!draft.trim()}
               className="text-xs px-3 py-1 rounded bg-[var(--accent)] text-white disabled:opacity-50"
             >
-              {activeIntent === 'write-doc' ? '开始 ⌘↩' : '发送 ⌘↩'}
+              发送 ⌘↩
             </button>
           )}
         </div>
       </div>
     </div>
-  )
-}
-
-function IntentBtn({
-  current,
-  value,
-  onClick,
-  children,
-}: {
-  current: string
-  value: 'chat' | 'write-doc'
-  onClick: (v: 'chat' | 'write-doc') => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={() => onClick(value)}
-      className={`text-xs px-2 py-1 rounded ${
-        current === value
-          ? 'bg-[var(--accent)] text-white'
-          : 'border border-[var(--border)] hover:bg-[var(--bg-soft)]'
-      }`}
-    >
-      {children}
-    </button>
   )
 }
 

@@ -67,12 +67,16 @@ interface ActiveRun {
   runId: string
   abort: AbortController
   webContents: WebContents
+  /** Panel session id (for session-scoped permission memory). */
+  sessionId?: string
   /** Pending permission requests keyed by reqId. */
-  pendingPerms: Map<string, (resp: AiPermissionResponse) => void>
+  pendingPerms: Map<string, { tool: string; resolve: (resp: AiPermissionResponse) => void }>
 }
 
 const activeRuns = new Map<string, ActiveRun>()
 const chatEngines = new Map<string, Engine>()
+/** "<sessionId>:<tool>" entries the user chose to allow for the whole session. */
+const sessionAllowed = new Set<string>()
 
 function emit(wc: WebContents, event: AiEvent) {
   if (!wc.isDestroyed()) wc.send('ai:event', event)
@@ -148,9 +152,10 @@ function composeUserBody(input: AiRunInput): string {
       const target = organizeTarget?.folderPath ?? '.'
       return `${message}\n\nTarget folder: ${target}`
     }
-    case 'write-doc': {
+    case 'write-doc':
+    case 'auto': {
       const flag = input.outlineApproved
-        ? '[outlineApproved=true — the user has accepted the outline. Skip clarify/outline phases and go directly to Phase 3 (Draft). The approved outline appears below.]\n\n'
+        ? '[outlineApproved=true — 用户已确认大纲，跳过问清楚/列大纲，直接进第3步逐节写入。确认后的大纲见下方。]\n\n'
         : ''
       return flag + message
     }
@@ -180,8 +185,15 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
   }
 
   const abort = new AbortController()
-  const pendingPerms = new Map<string, (r: AiPermissionResponse) => void>()
-  const active: ActiveRun = { runId, abort, webContents: wc, pendingPerms }
+  const pendingPerms = new Map<string, { tool: string; resolve: (r: AiPermissionResponse) => void }>()
+  const permSessionId = input.sessionId
+  const active: ActiveRun = {
+    runId,
+    abort,
+    webContents: wc,
+    sessionId: permSessionId,
+    pendingPerms,
+  }
   activeRuns.set(runId, active)
 
   const toolHost: ToolHostHooks = {
@@ -193,8 +205,14 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
           reject(new Error('aborted'))
           return
         }
+        // Session-scoped memory: if the user already chose "本次对话都允许"
+        // for this tool, auto-approve without re-prompting.
+        if (permSessionId && sessionAllowed.has(`${permSessionId}:${req.tool}`)) {
+          resolve({ reqId: 'auto', approved: true, scope: 'session' })
+          return
+        }
         const reqId = randomUUID()
-        pendingPerms.set(reqId, resolve)
+        pendingPerms.set(reqId, { tool: req.tool, resolve })
         const permReq: AiPermissionRequest = {
           reqId,
           tool: req.tool,
@@ -216,7 +234,9 @@ async function startRun(wc: WebContents, input: AiRunInput): Promise<{ runId: st
   // share one persistent Engine per panel sessionId so multi-turn workflows
   // (clarify → outline → draft) keep their transcript. Inline shots build a
   // fresh Engine each run.
-  const panelSession = (input.intent === 'chat' || input.intent === 'write-doc') && input.sessionId
+  const panelSession =
+    (input.intent === 'auto' || input.intent === 'chat' || input.intent === 'write-doc') &&
+    input.sessionId
   let engine: Engine
   let sessionId: string | undefined
   if (panelSession && chatEngines.has(input.sessionId!)) {
@@ -277,10 +297,15 @@ async function cancelRun(runId: string): Promise<void> {
 
 function respondPermission(resp: AiPermissionResponse): void {
   for (const run of activeRuns.values()) {
-    const resolver = run.pendingPerms.get(resp.reqId)
-    if (resolver) {
+    const entry = run.pendingPerms.get(resp.reqId)
+    if (entry) {
       run.pendingPerms.delete(resp.reqId)
-      resolver(resp)
+      // Remember session-scoped approvals so the same tool won't re-prompt
+      // for the rest of this chat session.
+      if (resp.approved && resp.scope === 'session' && run.sessionId) {
+        sessionAllowed.add(`${run.sessionId}:${entry.tool}`)
+      }
+      entry.resolve(resp)
       return
     }
   }
@@ -288,6 +313,9 @@ function respondPermission(resp: AiPermissionResponse): void {
 
 async function resetChatSession(sessionId: string): Promise<void> {
   chatEngines.delete(sessionId)
+  for (const key of sessionAllowed) {
+    if (key.startsWith(`${sessionId}:`)) sessionAllowed.delete(key)
+  }
 }
 
 async function testConnection(): Promise<AiTestConnectionResult> {
