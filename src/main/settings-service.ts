@@ -8,7 +8,7 @@ const DEFAULTS: AppSettings = {
   autoSave: true,
   autoSaveDelayMs: 1500,
   editorFontSize: 17,
-  editorLineHeight: 1.85,
+  editorLineHeight: 1.5,
   editorFontFamily: 'system',
   focusModeDefault: false,
   typewriterDefault: false,
